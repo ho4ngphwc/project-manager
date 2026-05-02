@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// BẢNG 1: NGƯỜI DÙNG
+model User {
+  id           Int       @id @default(autoincrement())
+  fullName     String
+  email        String    @unique
+  password     String
+  role         String    @default("user")
+  isFirstLogin Boolean   @default(true)
+
+  projects     Project[] @relation("ProjectMembers")
+  
+  tasks        Task[]    
+  notes        Note[]    
+}
+
+// BẢNG 2: CÔNG TRÌNH / DỰ ÁN
+model Project {
+  id        Int      @id @default(autoincrement())
+  name      String
+  status    String   @default("Đang làm")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members   User[]   @relation("ProjectMembers")
+
+  rooms     Room[]   
+  tasks     Task[]   
+}
+
+// BẢNG 3: PHÒNG 
+model Room {
+  id        Int      @id @default(autoincrement())
+  name      String
+  
+  projectId Int
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  tasks     Task[]   
+}
+
+// BẢNG 4: FILE CẮT / VẬT LIỆU
+model Task {
+  id         Int      @id @default(autoincrement())
+  material   String   
+  title      String   
+  filePath   String   
+  status     String   @default("TODO") 
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  note       String? 
+  isAccepted Boolean  @default(false) 
+
+  userId     Int?     
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  roomId     Int
+  room       Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  projectId  Int
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  notes      Note[]
+}
+
+// BẢNG 5: GHI CHÚ
+model Note {
+  id        Int      @id @default(autoincrement())
+  content   String
+  createdAt DateTime @default(now())
+
+  taskId    Int
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  userId    Int?
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
