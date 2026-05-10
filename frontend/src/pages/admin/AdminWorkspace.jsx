@@ -36,7 +36,6 @@ const formatDateTime = (dateString) => {
 export default function AdminWorkspace({ project, tasks, employees, fetchData, onBack }) {
   const rooms = project?.rooms || [];
   const projectTasks = tasks?.filter(t => t.projectId === project?.id) || [];
-  const currentAdminName = "Sếp Tâm";
 
   const [roomId, setRoomId] = useState('');
   const [material, setMaterial] = useState('');
@@ -55,28 +54,23 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
     }
   }, [rooms]);
 
-  // --- TÍNH NĂNG MỚI: PASTE (DÁN) ẢNH TỪ CLIPBOARD (Ctrl+V) ---
+  // Bắt sự kiện Paste trên toàn trang (khi tạo/sửa task)
   useEffect(() => {
     const handleGlobalPaste = (e) => {
-        // Kiểm tra xem trong bộ nhớ tạm (clipboard) có chứa file ảnh không
         const hasImage = Array.from(e.clipboardData.items).some(item => item.type.startsWith('image/'));
-        if (!hasImage) return; // Nếu họ dán chữ text bình thường thì bỏ qua, cho text hoạt động tự nhiên
+        if (!hasImage) return; 
+        
+        if (document.activeElement && document.activeElement.classList.contains('note-input-field')) return;
 
         const items = e.clipboardData.items;
         for (let item of items) {
             if (item.type.startsWith('image/')) {
                 const blob = item.getAsFile();
-                // Tạo một file mới với tên hệ thống tự cấp để upload
                 const file = new File([blob], `anh-dan-nhanh-${Date.now()}.png`, { type: item.type });
                 
-                if (editingTask) {
-                    // Nếu đang mở khung Edit, thì gán file dán vào khung Edit
-                    setEditFile(file);
-                } else {
-                    // Nếu đang ở màn hình ngoài, gán vào khung Tạo việc mới
+                if (editingTask) setEditFile(file);
+                else {
                     setSelectedFile(file);
-                    
-                    // Code ma thuật: Ép thẻ <input type="file"> hiển thị tên file vừa dán
                     const fileInput = document.getElementById('file-upload');
                     if (fileInput) {
                         const dataTransfer = new DataTransfer();
@@ -84,8 +78,6 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
                         fileInput.files = dataTransfer.files;
                     }
                 }
-                
-                // Chặn hành vi dán mặc định của trình duyệt để không dán bậy vào ô ghi chú
                 e.preventDefault();
                 break;
             }
@@ -94,11 +86,10 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
 
     window.addEventListener('paste', handleGlobalPaste);
     return () => window.removeEventListener('paste', handleGlobalPaste);
-  }, [editingTask]); // Phụ thuộc vào editingTask để phân luồng dán đúng chỗ
-  // -------------------------------------------------------------
+  }, [editingTask]);
 
   const handleAssignTask = async () => {
-    if (!roomId) return alert("Vui lòng tạo phòng trước khi thêm file cắt!");
+    if (!roomId) return alert("Vui lòng tạo phòng trước khi thêm file!");
     try {
       const selectedRoom = rooms.find(r => r.id === parseInt(roomId));
       const formData = new FormData();
@@ -167,6 +158,53 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
     } catch (error) { alert("Lỗi khi xóa phòng!"); }
   };
 
+  const handlePasteNoteImage = async (e, taskId) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    
+    let imageFile = null;
+    for (let item of items) {
+        if (item.type.startsWith('image/')) {
+            imageFile = item.getAsFile();
+            break;
+        }
+    }
+    
+    if (!imageFile) return; 
+    e.preventDefault(); 
+    
+    e.target.placeholder = "Đang tải ảnh lên...";
+    e.target.disabled = true;
+
+    try {
+        const formData = new FormData();
+        formData.append('file', imageFile);
+
+        const uploadRes = await fetch('/api/uploads', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!uploadRes.ok) throw new Error('Lỗi upload');
+        const uploadData = await uploadRes.json();
+        const finalUrl = uploadData.fileUrl || uploadData.filePath;
+
+        await fetch(`/api/tasks/${taskId}/notes`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: `[IMAGE]${finalUrl}` }) 
+        });
+        
+        fetchData();
+    } catch (err) {
+        alert("Không thể dán ảnh, vui lòng thử lại!");
+    } finally {
+        e.target.placeholder = "Nhắn nhân viên... (Ctrl+V dán ảnh)";
+        e.target.disabled = false;
+        e.target.value = '';
+        e.target.focus();
+    }
+  };
+
   return (
     <div className="bg-[#f8fafc] min-h-screen -m-6 p-6">
       <div className="flex justify-end items-center mb-6">
@@ -193,7 +231,7 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
 
         <div className="p-6 border-b border-slate-100 bg-slate-50/50">
           <h3 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-            <Plus size={16} className="text-blue-600"/> Đăng ký danh mục cắt
+            <Plus size={16} className="text-blue-600"/> Đăng ký danh mục
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
             <div className="space-y-1 lg:col-span-1">
@@ -213,10 +251,9 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
             </div>
             <div className="space-y-1 lg:col-span-2">
               <label className="text-[11px] font-bold text-slate-500 uppercase ml-1">Ghi chú (Tùy chọn)</label>
-              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Dặn dò thợ..." className="w-full border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Dặn dò nhân viên..." className="w-full border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div className="space-y-1 lg:col-span-1">
-              {/* Đã thêm hướng dẫn Ctrl+V vào chữ File */}
               <label className="text-[11px] font-bold text-slate-500 uppercase ml-1 text-blue-600">File (Hỗ trợ Ctrl+V)</label>
               <input id="file-upload" type="file" onChange={(e) => setSelectedFile(e.target.files[0])} className="w-full border border-slate-200 rounded-xl p-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer transition" />
             </div>
@@ -226,7 +263,6 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
           </button>
         </div>
 
-        {/* Filter Bar */}
         {rooms.length > 0 && (
             <div className="px-6 py-4 border-b border-slate-100 bg-white flex flex-wrap gap-2 items-center">
                 <span className="text-sm font-bold text-slate-600 flex items-center gap-1 mr-2">
@@ -235,7 +271,7 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
                 <button onClick={() => setTaskFilter('ALL')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'ALL' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Tất cả</button>
                 <button onClick={() => setTaskFilter('CHUA_NHAN')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'CHUA_NHAN' ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-600 hover:bg-orange-100'}`}>Chưa nhận</button>
                 <button onClick={() => setTaskFilter('DANG_LAM')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'DANG_LAM' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}>Đang làm</button>
-                <button onClick={() => setTaskFilter('DA_XONG')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'DA_XONG' ? 'bg-green-600 text-white' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>Đã cắt xong</button>
+                <button onClick={() => setTaskFilter('DA_XONG')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'DA_XONG' ? 'bg-green-600 text-white' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>Đã xong</button>
             </div>
         )}
 
@@ -287,7 +323,7 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
                                     <li key={index} className={`flex items-start gap-1.5 ${isAllDone ? 'line-through text-slate-300' : ''}`}>
                                         <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isAllDone ? 'bg-green-400' : 'bg-slate-400'}`}></span>
                                         <div className="flex-1">
-                                            <span className="font-bold">{mat}:</span> {materialSummary[mat].chuaNhan} chưa nhận, {materialSummary[mat].dangLam} đang làm, {materialSummary[mat].daCat} đã cắt
+                                            <span className="font-bold">{mat}:</span> {materialSummary[mat].chuaNhan} chưa nhận, {materialSummary[mat].dangLam} đang làm, {materialSummary[mat].daCat} đã xong
                                         </div>
                                     </li>
                                     )
@@ -328,7 +364,6 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
                                       <input value={editingTask.title || ''} onChange={e => setEditingTask({...editingTask, title: e.target.value})} className="w-full text-xs p-2 border border-slate-200 rounded outline-none focus:border-blue-400" placeholder="Tên vách (Tùy chọn)..." />
                                       
                                       <div className="mt-2 p-2 bg-white border border-slate-200 rounded">
-                                          {/* Gợi ý Ctrl+V vào ô cập nhật */}
                                           <label className="text-[10px] font-bold text-blue-600 uppercase block mb-1">Cập nhật File (Nhấn Ctrl+V dán nhanh)</label>
                                           <input 
                                               type="file" 
@@ -338,12 +373,12 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
                                           {editFile ? (
                                               <p className="text-[10px] text-green-600 font-bold mt-1 truncate">✓ Đã dán/chọn: {editFile.name}</p>
                                           ) : (
-                                              <p className="text-[9px] text-slate-400 italic mt-1">Bỏ qua nếu giữ bản vẽ cũ.</p>
+                                              <p className="text-[9px] text-slate-400 italic mt-1">Bỏ qua nếu giữ file cũ.</p>
                                           )}
                                       </div>
 
                                       <div className="flex gap-2 pt-1">
-                                          <button onClick={handleSaveEdit} className="bg-blue-600 text-white px-3 py-1.5 rounded text-[11px] font-bold hover:bg-blue-700 shadow-sm">Lưu thay đổi</button>
+                                          <button onClick={handleSaveEdit} className="bg-blue-600 text-white px-3 py-1.5 rounded text-[11px] font-bold hover:bg-blue-700 shadow-sm">Lưu</button>
                                           <button onClick={() => { setEditingTask(null); setEditFile(null); }} className="bg-slate-200 text-slate-600 px-3 py-1.5 rounded text-[11px] font-bold hover:bg-slate-300">Hủy</button>
                                       </div>
                                   </div>
@@ -361,7 +396,7 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
                               
                               <div className="text-[11px] text-slate-500 space-y-1.5 mt-2">
                                 <p className="truncate">File: {task.filePath ? <span className="text-blue-500 font-bold">{formatFileName(task.filePath)}</span> : '---'}</p>
-                                {task.userId && <p className="font-bold text-slate-700">Thợ: {task.user?.fullName}</p>}
+                                {task.userId && <p className="font-bold text-slate-700">Nhân viên: {task.user?.fullName}</p>}
                                 
                                 <div className="pt-1">
                                     {task.status === 'DONE' ? (
@@ -378,24 +413,37 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
                                         </span>
                                     )}
                                 </div>
-                                
                               </div>
 
                               <div className="border-t border-slate-100 pt-3 mt-3">
                                 <div className="space-y-2 mb-3 max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 pr-1">
-                                  {task.notes && task.notes.map(n => (
-                                    <div key={n.id} className="text-[13px] leading-relaxed">
-                                        <span className={`font-bold ${!n.userId ? 'text-red-600' : 'text-blue-600'}`}>
-                                            {!n.userId ? 'Sếp' : n.user?.fullName.split(' ').pop()}: 
-                                        </span> 
-                                        <span className="text-slate-700 ml-1">{n.content}</span>
-                                    </div>
-                                  ))}
+                                  {task.notes && task.notes.map(n => {
+                                      const isImageNote = n.content.startsWith('[IMAGE]');
+                                      const noteContent = isImageNote ? n.content.replace('[IMAGE]', '') : n.content;
+
+                                      return (
+                                        <div key={n.id} className="text-[13px] leading-relaxed">
+                                            <span className={`font-bold ${!n.userId ? 'text-red-600' : 'text-blue-600'}`}>
+                                                {!n.userId ? 'Sếp' : n.user?.fullName.split(' ').pop()}: 
+                                            </span> 
+                                            
+                                            {isImageNote ? (
+                                                <a href={getFileUrl(noteContent)} target="_blank" rel="noopener noreferrer" className="block mt-1">
+                                                    <img src={getFileUrl(noteContent)} alt="Ghi chú hình ảnh" className="max-w-full h-auto max-h-[120px] rounded-lg border border-slate-200 shadow-sm object-contain bg-slate-50 hover:opacity-90 transition"/>
+                                                </a>
+                                            ) : (
+                                                <span className="text-slate-700 ml-1">{noteContent}</span>
+                                            )}
+                                        </div>
+                                      )
+                                  })}
                                 </div>
+                                
                                 <input 
                                   type="text" 
-                                  placeholder="Nhắn thợ..." 
-                                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                                  placeholder="Nhắn nhân viên... (Ctrl+V dán ảnh)" 
+                                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm note-input-field"
+                                  onPaste={(e) => handlePasteNoteImage(e, task.id)}
                                   onKeyDown={async (e) => {
                                       if (e.key === 'Enter') {
                                           if (e.nativeEvent.isComposing) return;

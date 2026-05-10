@@ -201,7 +201,7 @@ export default function AdminOverview({ projects, tasks, employees, fetchData, o
                         </div>
                         
                         <div className="mt-6 pt-6 border-t border-slate-100">
-                            <p className="text-sm font-bold text-slate-500 mb-3">Đội ngũ thợ ({employees.length})</p>
+                            <p className="text-sm font-bold text-slate-500 mb-3">Đội ngũ ({employees.length})</p>
                             <div className="flex flex-wrap gap-2">
                                 {employees.map(emp => (
                                     <div key={emp.id} className="group flex items-center gap-1 bg-slate-50 pl-2 pr-1 py-1 rounded-md border border-slate-200 hover:bg-red-50 hover:border-red-100 transition-all">

@@ -70,7 +70,7 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
   };
 
   const handleCompleteTask = async (taskId) => {
-      if (!window.confirm("Xác nhận đã cắt xong?")) return;
+      if (!window.confirm("Xác nhận đã xong?")) return;
       try {
           const res = await fetch(`/api/tasks/${taskId}`, {
               method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -91,13 +91,60 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
       } catch (error) { alert("Lỗi kết nối!"); }
   };
 
-  // --- HÀM LOGIC DÙNG CHUNG ---
   const checkUnreadAdminNote = (task, currentUserId) => {
       if (task.userId && task.userId !== parseInt(currentUserId)) return false;
       if (!task.notes || task.notes.length === 0) return false;
       const lastNote = task.notes[task.notes.length - 1];
       return !lastNote.userId;
   };
+
+  // --- LOGIC XỬ LÝ DÁN ẢNH TRONG Ô GHI CHÚ (NHÂN VIÊN) ---
+  const handlePasteNoteImage = async (e, taskId) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    
+    let imageFile = null;
+    for (let item of items) {
+        if (item.type.startsWith('image/')) {
+            imageFile = item.getAsFile();
+            break;
+        }
+    }
+    
+    if (!imageFile) return; 
+    e.preventDefault(); 
+    
+    e.target.placeholder = "Đang tải ảnh lên...";
+    e.target.disabled = true;
+
+    try {
+        const formData = new FormData();
+        formData.append('file', imageFile);
+
+        const uploadRes = await fetch('/api/uploads', {
+            method: 'POST', body: formData
+        });
+        
+        if (!uploadRes.ok) throw new Error('Lỗi upload');
+        const uploadData = await uploadRes.json();
+        const finalUrl = uploadData.fileUrl || uploadData.filePath;
+
+        await fetch(`/api/tasks/${taskId}/notes`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: `[IMAGE]${finalUrl}`, userId: parseInt(currentUser.id) }) 
+        });
+        
+        fetchData();
+    } catch (err) {
+        alert("Không thể dán ảnh, vui lòng thử lại!");
+    } finally {
+        e.target.placeholder = "Báo cáo sếp... (Ctrl+V dán ảnh)";
+        e.target.disabled = false;
+        e.target.value = '';
+        e.target.focus();
+    }
+  };
+  // -----------------------------------------------------
 
   return (
     <div className="bg-[#f8fafc] min-h-screen -m-6 p-6">
@@ -114,15 +161,15 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
         <div className="bg-slate-800 p-6 flex justify-between items-center text-white border-b-4 border-orange-500">
           <div>
             <h2 className="text-2xl font-bold uppercase">{project?.name || 'Đang tải...'}</h2>
-            <p className="text-slate-300 text-sm mt-1">Hồ bơi việc làm - Rảnh tay là bấm nhận!</p>
+            <p className="text-slate-300 text-sm mt-1">Không gian làm việc - Nhận việc và cập nhật tiến độ</p>
           </div>
         </div>
 
         <div className="px-6 py-4 border-b border-slate-100 bg-white flex flex-wrap gap-2 items-center">
             <span className="text-sm font-bold text-slate-600 flex items-center gap-1 mr-2"><Filter size={16}/> Lọc việc:</span>
-            <button onClick={() => setTaskFilter('ALL')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'ALL' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}>Tất cả</button>
-            <button onClick={() => setTaskFilter('CHUA_NHAN')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'CHUA_NHAN' ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-600'}`}>Chưa ai nhận</button>
-            <button onClick={() => setTaskFilter('MY_TASKS')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'MY_TASKS' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'}`}>Việc của tôi</button>
+            <button onClick={() => setTaskFilter('ALL')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'ALL' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Tất cả</button>
+            <button onClick={() => setTaskFilter('CHUA_NHAN')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'CHUA_NHAN' ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-600 hover:bg-orange-100'}`}>Chưa ai nhận</button>
+            <button onClick={() => setTaskFilter('MY_TASKS')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'MY_TASKS' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}>Việc của tôi</button>
             
             <button 
                 onClick={() => setTaskFilter('CO_NOTE')} 
@@ -144,22 +191,12 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
                     if (taskFilter === 'ALL') return true;
                     if (taskFilter === 'CHUA_NHAN') return !t.userId;
                     if (taskFilter === 'MY_TASKS') return t.userId === parseInt(currentUser?.id);
-                    // LỌC THEO LOGIC MỚI: Chỉ hiện task sếp nhắn cuối cùng
                     if (taskFilter === 'CO_NOTE') return checkUnreadAdminNote(t, currentUser?.id); 
                     return true;
                 }).sort((a, b) => {
                     if (a.status === 'DONE' && b.status !== 'DONE') return 1;
                     if (a.status !== 'DONE' && b.status === 'DONE') return -1;
                     return 0;
-                });
-
-                const materialSummary = {};
-                roomTasks.forEach(task => {
-                    const mat = task.material || 'Khác';
-                    if (!materialSummary[mat]) materialSummary[mat] = { chuaNhan: 0, dangLam: 0, daCat: 0 };
-                    if (task.status === 'DONE') materialSummary[mat].daCat++;
-                    else if (task.userId) materialSummary[mat].dangLam++;
-                    else materialSummary[mat].chuaNhan++;
                 });
 
                 return (
@@ -177,8 +214,6 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
                           const fileUrl = getFileUrl(task.filePath);
                           const isImg = isImageFile(task.filePath);
                           const isMyTask = currentUser && task.userId === parseInt(currentUser.id);
-                          
-                          // DÙNG LOGIC MỚI ĐỂ HIỆN VIỀN ĐỎ VÀ CHUÔNG
                           const hasUnreadNote = checkUnreadAdminNote(task, currentUser?.id);
 
                           return (
@@ -189,7 +224,6 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
                               task.userId ? 'border-slate-200 bg-slate-100 opacity-60' : 'border-orange-200 bg-white hover:border-orange-400' 
                           }`}>
                             
-                            {/* NHÃN TIN NHẮN MỚI SẼ BIẾN MẤT NẾU THỢ NHẮN LẠI */}
                             {hasUnreadNote && (
                                 <div className="absolute -top-3 left-3 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm flex items-center gap-1 animate-pulse z-10">
                                     <Bell size={10} /> TIN NHẮN MỚI
@@ -225,11 +259,11 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
                                           {isMyTask && <button onClick={() => handleUndoComplete(task.id)} className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-100 rounded-md transition"><RotateCcw size={14} /></button>}
                                       </div>
                                   ) : !task.userId ? (
-                                      <button onClick={() => handleAcceptTask(task.id)} className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600 transition shadow-md active:scale-95"><HandMetal size={18}/> Bấm Nhận Việc</button>
+                                      <button onClick={() => handleAcceptTask(task.id)} className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600 transition shadow-md active:scale-95"><HandMetal size={18}/> Nhận Việc Này</button>
                                   ) : isMyTask ? (
                                       <div className="flex gap-2">
                                           <button onClick={() => handleCancelAccept(task.id)} className="px-3 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-bold hover:bg-red-100 transition" title="Nhả việc"><XCircle size={18}/></button>
-                                          <button onClick={() => handleCompleteTask(task.id)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition shadow-md active:scale-95"><CheckSquare size={18}/> Đã cắt xong</button>
+                                          <button onClick={() => handleCompleteTask(task.id)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition shadow-md active:scale-95"><CheckSquare size={18}/> Đã hoàn thành</button>
                                       </div>
                                   ) : (
                                       <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 text-slate-500 rounded-lg text-xs font-bold">🔒 {task.user?.fullName} đang làm</div>
@@ -241,18 +275,29 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
                                   {task.notes && task.notes.map(n => {
                                       const isAdmin = !n.userId;
                                       const senderName = isAdmin ? "Sếp Tâm" : n.user?.fullName.split(' ').pop();
+                                      const isImageNote = n.content.startsWith('[IMAGE]');
+                                      const noteContent = isImageNote ? n.content.replace('[IMAGE]', '') : n.content;
+
                                       return (
                                         <div key={n.id} className="text-[13px] leading-relaxed">
                                             <span className={`font-bold ${isAdmin ? 'text-red-600' : 'text-blue-600'}`}>{senderName}: </span>
-                                            <span className="text-slate-700 ml-1">{n.content}</span>
+                                            
+                                            {isImageNote ? (
+                                                <a href={getFileUrl(noteContent)} target="_blank" rel="noopener noreferrer" className="block mt-1">
+                                                    <img src={getFileUrl(noteContent)} alt="Ghi chú hình ảnh" className="max-w-full h-auto max-h-[120px] rounded-lg border border-slate-200 shadow-sm object-contain bg-white hover:opacity-90 transition"/>
+                                                </a>
+                                            ) : (
+                                                <span className="text-slate-700 ml-1">{noteContent}</span>
+                                            )}
                                         </div>
                                       )
                                   })}
                                 </div>
                                 <input 
                                   type="text" 
-                                  placeholder="Nhắn tin lại cho sếp để tắt chuông..." 
-                                  className={`w-full border rounded-xl px-3 py-2.5 text-[13px] outline-none focus:ring-2 bg-white shadow-sm transition-colors ${hasUnreadNote ? 'border-red-300 focus:ring-red-400 bg-red-50/50' : 'border-slate-200 focus:ring-blue-400'}`}
+                                  placeholder={hasUnreadNote ? "Nhắn tin báo cáo sếp... (Ctrl+V dán ảnh)" : "Báo cáo sếp... (Ctrl+V dán ảnh)"} 
+                                  className={`w-full border rounded-xl px-3 py-2.5 text-[13px] outline-none focus:ring-2 bg-white shadow-sm transition-colors note-input-field ${hasUnreadNote ? 'border-red-300 focus:ring-red-400 bg-red-50/50' : 'border-slate-200 focus:ring-blue-400'}`}
+                                  onPaste={(e) => handlePasteNoteImage(e, task.id)}
                                   onKeyDown={async (e) => {
                                       if (e.key === 'Enter') {
                                           if (e.nativeEvent.isComposing) return;
