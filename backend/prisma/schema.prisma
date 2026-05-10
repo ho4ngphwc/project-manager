@@ -50,8 +50,8 @@ model Room {
 // BẢNG 4: FILE CẮT / VẬT LIỆU
 model Task {
   id         Int      @id @default(autoincrement())
-  material   String   
-  title      String   
+  material   String?   
+  title      String?   
   filePath   String   
   status     String   @default("TODO") 
   createdAt  DateTime @default(now())

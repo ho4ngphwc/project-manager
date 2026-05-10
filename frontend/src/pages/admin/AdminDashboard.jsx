@@ -36,6 +36,18 @@ export default function AdminDashboard() {
     };
 
     useEffect(() => {
+        const handleGoHome = () => {
+            setActiveProject(null);
+        };
+
+        window.addEventListener('goHome', handleGoHome);
+
+        return () => {
+            window.removeEventListener('goHome', handleGoHome);
+        };
+    }, []);
+
+    useEffect(() => {
         fetchData();
 
         const interval = setInterval(() => {

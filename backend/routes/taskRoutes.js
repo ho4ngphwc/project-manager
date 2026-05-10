@@ -71,15 +71,15 @@ router.post('/', upload.single('file'), async (req, res) => {
     try {
         const { roomId, material, title, projectId, userId, note } = req.body;
 
-        if (!roomId || !material || !title || !projectId) {
+        if (!roomId || !projectId) {
             return res.status(400).json({ error: "Thiếu thông tin bắt buộc!" });
         }
 
         const filePath = req.file ? req.file.path.replace(/\\/g, '/') : "";
 
         const taskData = {
-            material: material,
-            title: title,
+            material: material || "",
+            title: title || "",
             filePath: filePath,
             status: "TODO",
             roomId: parseInt(roomId),

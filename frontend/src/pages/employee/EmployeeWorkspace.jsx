@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { ArrowLeft, CheckCircle, Clock, MessageSquare, Image as ImageIcon, Download, HandMetal, CheckSquare, XCircle, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, CheckCircle, Clock, MessageSquare, Image as ImageIcon, Download, HandMetal, CheckSquare, XCircle, RotateCcw, Filter, Bell } from 'lucide-react';
 
 const formatFileName = (path) => {
     if (!path) return '';
@@ -14,9 +14,7 @@ const getFileUrl = (filePath) => {
     if (!filePath) return '';
     const cleanPath = filePath.replace(/\\/g, '/');
     const uploadsIndex = cleanPath.indexOf('uploads/');
-    if (uploadsIndex !== -1) {
-        return `/${cleanPath.substring(uploadsIndex)}`; 
-    }
+    if (uploadsIndex !== -1) return `/${cleanPath.substring(uploadsIndex)}`; 
     return cleanPath;
 };
 
@@ -35,233 +33,241 @@ const formatDateTime = (dateString) => {
 export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, currentUser }) {
   const rooms = project?.rooms || [];
   const projectTasks = tasks?.filter(t => t.projectId === project?.id) || [];
+  
+  const [taskFilter, setTaskFilter] = useState('ALL'); 
 
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      if (fetchData) {
-        fetchData();
-      }
-    }, 5000);
-    
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, []);
+    const intervalId = setInterval(() => { if (fetchData) fetchData(); }, 5000);
+    return () => clearInterval(intervalId);
+  }, [fetchData]);
+
+  useEffect(() => {
+    const handleGoHome = () => { if (onBack) onBack(); };
+    window.addEventListener('goHome', handleGoHome);
+    return () => window.removeEventListener('goHome', handleGoHome);
+  }, [onBack]);
 
   const handleAcceptTask = async (taskId) => {
-      if (!currentUser?.id) return alert("Lỗi: Không tìm thấy thông tin đăng nhập!");
+      if (!currentUser?.id) return alert("Lỗi phiên đăng nhập!");
       try {
           const res = await fetch(`/api/tasks/${taskId}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                  userId: parseInt(currentUser.id), 
-                  isAccepted: true,
-                  status: 'DOING'
-              })
+              method: 'PUT', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: parseInt(currentUser.id), isAccepted: true, status: 'DOING' })
           });
           if (res.ok) fetchData();
-          else alert("Có lỗi xảy ra khi nhận việc!");
-      } catch (error) { alert("Lỗi kết nối máy chủ!"); }
+      } catch (error) { alert("Lỗi kết nối!"); }
   };
 
   const handleCancelAccept = async (taskId) => {
-      if (!window.confirm("Bạn có chắc muốn nhả việc này ra không?")) return;
+      if (!window.confirm("Nhả việc này ra cho người khác?")) return;
       try {
           const res = await fetch(`/api/tasks/${taskId}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                  userId: null, 
-                  isAccepted: false,
-                  status: 'TODO' 
-              })
+              method: 'PUT', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: null, isAccepted: false, status: 'TODO' })
           });
           if (res.ok) fetchData();
-          else alert("Có lỗi xảy ra khi hủy nhận việc!");
-      } catch (error) { alert("Lỗi kết nối máy chủ!"); }
+      } catch (error) { alert("Lỗi kết nối!"); }
   };
 
   const handleCompleteTask = async (taskId) => {
-      if (!window.confirm("Bạn chắc chắn đã cắt xong rồi chứ?")) return;
+      if (!window.confirm("Xác nhận đã cắt xong?")) return;
       try {
           const res = await fetch(`/api/tasks/${taskId}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
+              method: 'PUT', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ status: 'DONE' })
           });
           if (res.ok) fetchData();
-          else alert("Có lỗi xảy ra khi xác nhận!");
-      } catch (error) { alert("Lỗi kết nối máy chủ!"); }
+      } catch (error) { alert("Lỗi kết nối!"); }
   };
 
   const handleUndoComplete = async (taskId) => {
-      if (!window.confirm("Đánh dấu lại là chưa cắt xong?")) return;
+      if (!window.confirm("Hoàn tác trạng thái chưa xong?")) return;
       try {
           const res = await fetch(`/api/tasks/${taskId}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
+              method: 'PUT', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ status: 'DOING' }) 
           });
           if (res.ok) fetchData();
-          else alert("Có lỗi xảy ra khi hoàn tác!");
-      } catch (error) { alert("Lỗi kết nối máy chủ!"); }
+      } catch (error) { alert("Lỗi kết nối!"); }
+  };
+
+  // --- HÀM LOGIC DÙNG CHUNG ---
+  const checkUnreadAdminNote = (task, currentUserId) => {
+      if (task.userId && task.userId !== parseInt(currentUserId)) return false;
+      if (!task.notes || task.notes.length === 0) return false;
+      const lastNote = task.notes[task.notes.length - 1];
+      return !lastNote.userId;
   };
 
   return (
     <div className="bg-[#f8fafc] min-h-screen -m-6 p-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition shadow-sm">
-          <ArrowLeft size={18} /> Quay lại
-        </button>
+      <div className="flex justify-end items-center mb-6">
+        <div className="flex items-center gap-3">
+          <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${project.status === 'Đã hoàn thành' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
+            {project.status || 'Đang làm'}
+          </span>
+          <span className="text-slate-400 text-sm font-medium">Dự án: <span className="text-slate-900">{project.name}</span></span>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="bg-slate-800 p-6 flex flex-col md:flex-row justify-between items-start md:items-center text-white border-b-4 border-orange-500">
+        <div className="bg-slate-800 p-6 flex justify-between items-center text-white border-b-4 border-orange-500">
           <div>
-            <h2 className="text-2xl font-bold uppercase">{project?.name || 'Chưa tải dự án'}</h2>
-            <p className="text-slate-300 text-sm mt-1 flex items-center gap-1">
-              Hồ bơi việc làm - Rảnh tay là bấm nhận!
-            </p>
+            <h2 className="text-2xl font-bold uppercase">{project?.name || 'Đang tải...'}</h2>
+            <p className="text-slate-300 text-sm mt-1">Hồ bơi việc làm - Rảnh tay là bấm nhận!</p>
           </div>
+        </div>
+
+        <div className="px-6 py-4 border-b border-slate-100 bg-white flex flex-wrap gap-2 items-center">
+            <span className="text-sm font-bold text-slate-600 flex items-center gap-1 mr-2"><Filter size={16}/> Lọc việc:</span>
+            <button onClick={() => setTaskFilter('ALL')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'ALL' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}>Tất cả</button>
+            <button onClick={() => setTaskFilter('CHUA_NHAN')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'CHUA_NHAN' ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-600'}`}>Chưa ai nhận</button>
+            <button onClick={() => setTaskFilter('MY_TASKS')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'MY_TASKS' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'}`}>Việc của tôi</button>
+            
+            <button 
+                onClick={() => setTaskFilter('CO_NOTE')} 
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${taskFilter === 'CO_NOTE' ? 'bg-red-500 text-white shadow-md' : 'bg-red-50 text-red-600 border border-red-100 hover:bg-red-100'}`}
+            >
+                Tin nhắn mới <Bell size={12}/>
+            </button>
         </div>
 
         <div className="p-6 bg-slate-50">
           {rooms.length === 0 ? (
-            <div className="text-center py-20">
-               <p className="text-slate-500 font-medium">Sếp chưa tạo phòng nào.</p>
-            </div>
+            <div className="text-center py-20"><p className="text-slate-500 font-medium">Sếp chưa tạo phòng nào.</p></div>
           ) : (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6">
               {rooms.map(room => {
                 const roomTasks = projectTasks.filter(t => t.roomId === room.id);
+                
+                const displayTasks = roomTasks.filter(t => {
+                    if (taskFilter === 'ALL') return true;
+                    if (taskFilter === 'CHUA_NHAN') return !t.userId;
+                    if (taskFilter === 'MY_TASKS') return t.userId === parseInt(currentUser?.id);
+                    // LỌC THEO LOGIC MỚI: Chỉ hiện task sếp nhắn cuối cùng
+                    if (taskFilter === 'CO_NOTE') return checkUnreadAdminNote(t, currentUser?.id); 
+                    return true;
+                }).sort((a, b) => {
+                    if (a.status === 'DONE' && b.status !== 'DONE') return 1;
+                    if (a.status !== 'DONE' && b.status === 'DONE') return -1;
+                    return 0;
+                });
+
+                const materialSummary = {};
+                roomTasks.forEach(task => {
+                    const mat = task.material || 'Khác';
+                    if (!materialSummary[mat]) materialSummary[mat] = { chuaNhan: 0, dangLam: 0, daCat: 0 };
+                    if (task.status === 'DONE') materialSummary[mat].daCat++;
+                    else if (task.userId) materialSummary[mat].dangLam++;
+                    else materialSummary[mat].chuaNhan++;
+                });
+
                 return (
-                  <div key={room.id} className="border border-slate-200 rounded-2xl bg-white shadow-sm overflow-hidden flex flex-col">
-                    <div className="p-4 bg-white flex justify-between items-center border-b border-slate-200">
-                      <h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg">
-                        <span className="w-2 h-6 bg-orange-500 rounded-full inline-block"></span>
-                        {room.name}
-                      </h3>
-                      <span className="text-xs font-bold bg-slate-100 text-slate-500 px-3 py-1 rounded-full">
-                          {roomTasks.length} mục
-                      </span>
+                  <div key={room.id} className="border border-slate-200 rounded-2xl bg-white shadow-sm overflow-hidden flex flex-col h-full">
+                    <div className="p-4 bg-slate-100 flex justify-between items-center border-b border-slate-200">
+                      <h3 className="font-bold text-slate-800 text-base truncate pr-2">{room.name}</h3>
+                      <span className="text-xs font-bold bg-white text-slate-500 px-2 py-1 rounded-md border">{roomTasks.length} mục</span>
                     </div>
 
-                    <div className="p-4 space-y-4 flex-1 bg-slate-50/50">
-                      {roomTasks.length === 0 ? (
-                        <p className="text-sm text-slate-400 italic text-center py-8">Phòng này chưa có việc.</p>
+                    <div className="p-3 space-y-3 flex-1 bg-slate-50/30">
+                      {displayTasks.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic text-center py-8">Trống.</p>
                       ) : (
-                        roomTasks.map(task => {
+                        displayTasks.map(task => {
                           const fileUrl = getFileUrl(task.filePath);
                           const isImg = isImageFile(task.filePath);
                           const isMyTask = currentUser && task.userId === parseInt(currentUser.id);
+                          
+                          // DÙNG LOGIC MỚI ĐỂ HIỆN VIỀN ĐỎ VÀ CHUÔNG
+                          const hasUnreadNote = checkUnreadAdminNote(task, currentUser?.id);
 
                           return (
-                          <div key={task.id} className={`flex gap-4 p-4 rounded-xl border transition-all shadow-sm ${
+                          <div key={task.id} className={`flex flex-col gap-3 p-3 rounded-xl border transition-all shadow-sm relative ${
+                              hasUnreadNote ? 'border-2 border-red-400 bg-red-50/20 shadow-md' : 
                               task.status === 'DONE' ? 'border-green-200 bg-green-50/30 opacity-70' :
-                              isMyTask ? 'border-blue-300 bg-blue-50/30 shadow-md' : 
-                              task.userId ? 'border-slate-200 bg-slate-100 opacity-60' : 
-                              'border-orange-200 bg-white hover:border-orange-400' 
+                              isMyTask ? 'border-blue-300 bg-blue-50' : 
+                              task.userId ? 'border-slate-200 bg-slate-100 opacity-60' : 'border-orange-200 bg-white hover:border-orange-400' 
                           }`}>
                             
+                            {/* NHÃN TIN NHẮN MỚI SẼ BIẾN MẤT NẾU THỢ NHẮN LẠI */}
+                            {hasUnreadNote && (
+                                <div className="absolute -top-3 left-3 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm flex items-center gap-1 animate-pulse z-10">
+                                    <Bell size={10} /> TIN NHẮN MỚI
+                                </div>
+                            )}
+
                             {task.filePath ? (
-                                <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="w-20 h-20 bg-slate-50 rounded-lg flex flex-col items-center justify-center text-blue-500 shrink-0 border border-slate-200 overflow-hidden group">
+                                <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="w-full h-40 mt-2 bg-white rounded-lg flex items-center justify-center text-blue-500 shrink-0 border border-slate-200 overflow-hidden group">
                                   {isImg ? (
-                                      <img src={fileUrl} alt="Thumbnail" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                                      <img src={fileUrl} alt="Thumbnail" className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300" />
                                   ) : (
-                                      <>
-                                          <Download size={24} className="mb-1 text-blue-500"/>
-                                          <span className="text-[10px] font-bold text-center leading-tight">Mở File</span>
-                                      </>
+                                      <Download size={32} />
                                   )}
                                 </a>
                             ) : (
-                                <div className="w-20 h-20 bg-slate-50 rounded-lg flex flex-col items-center justify-center text-slate-300 shrink-0 border border-dashed border-slate-200">
-                                  <ImageIcon size={24} className="mb-1"/>
-                                  <span className="text-[10px] font-medium text-center leading-tight">Chưa có<br/>file</span>
-                                </div>
+                                <div className="w-full h-40 mt-2 bg-slate-50 rounded-lg flex items-center justify-center text-slate-300 border border-dashed border-slate-200"><ImageIcon size={32} /></div>
                             )}
                             
-                            <div className="min-w-0 flex-1 flex flex-col justify-between">
-                              <div>
-                                  <h4 className={`font-bold text-[16px] truncate mb-1 ${task.status === 'DONE' ? 'text-green-700' : 'text-slate-800'}`}>
-                                    {task.material} - {task.title}
-                                  </h4>
-                                  <div className="text-[12px] text-slate-600 space-y-0.5 mb-2">
-                                    <p><span className="text-slate-400">File:</span> <span className="font-medium text-blue-600">{task.filePath ? formatFileName(task.filePath) : '---'}</span></p>
-                                    <p><span className="text-slate-400">Giao lúc:</span> {formatDateTime(task.createdAt)}</p>
-                                  </div>
+                            <div className="min-w-0 flex-1">
+                              <h4 className={`font-bold text-[14px] truncate transition-all ${task.status === 'DONE' ? 'line-through text-slate-300' : 'text-slate-800'}`}>
+                                {task.material?.trim() ? task.material : 'Trống VL'} - {task.title?.trim() ? task.title : 'Trống Tên'}
+                              </h4>
+                              
+                              <div className="text-[11px] text-slate-500 space-y-1 mt-1">
+                                <p className="truncate">File: <span className="text-blue-500 font-bold">{task.filePath ? formatFileName(task.filePath) : '---'}</span></p>
+                                <p>Giao lúc: {formatDateTime(task.createdAt)}</p>
                               </div>
 
-                              <div className="mt-2">
+                              <div className="mt-3">
                                   {task.status === 'DONE' ? (
                                       <div className="flex items-center gap-2">
-                                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-bold">
-                                              <CheckCircle size={16}/> Đã cắt xong
-                                          </span>
-                                          {isMyTask && (
-                                              <button onClick={() => handleUndoComplete(task.id)} title="Hoàn tác (Đánh dấu chưa xong)" className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-100 rounded-md transition">
-                                                  <RotateCcw size={16} />
-                                              </button>
-                                          )}
+                                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-bold"><CheckCircle size={14}/> Đã xong</span>
+                                          {isMyTask && <button onClick={() => handleUndoComplete(task.id)} className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-100 rounded-md transition"><RotateCcw size={14} /></button>}
                                       </div>
                                   ) : !task.userId ? (
-                                      <button onClick={() => handleAcceptTask(task.id)} className="w-full md:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600 transition shadow-md shadow-orange-500/20 active:scale-95">
-                                          <HandMetal size={18}/> Bấm Nhận Việc
-                                      </button>
+                                      <button onClick={() => handleAcceptTask(task.id)} className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600 transition shadow-md active:scale-95"><HandMetal size={18}/> Bấm Nhận Việc</button>
                                   ) : isMyTask ? (
-                                      <div className="flex flex-col md:flex-row gap-2">
-                                          <button onClick={() => handleCancelAccept(task.id)} className="inline-flex items-center justify-center gap-1 px-3 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-bold hover:bg-red-100 transition" title="Nhả việc lại cho người khác">
-                                              <XCircle size={18}/> Hủy
-                                          </button>
-                                          <button onClick={() => handleCompleteTask(task.id)} className="w-full md:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition shadow-md shadow-green-600/20 active:scale-95 flex-1">
-                                              <CheckSquare size={18}/> Xác nhận đã cắt
-                                          </button>
+                                      <div className="flex gap-2">
+                                          <button onClick={() => handleCancelAccept(task.id)} className="px-3 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-bold hover:bg-red-100 transition" title="Nhả việc"><XCircle size={18}/></button>
+                                          <button onClick={() => handleCompleteTask(task.id)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition shadow-md active:scale-95"><CheckSquare size={18}/> Đã cắt xong</button>
                                       </div>
                                   ) : (
-                                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 text-slate-500 rounded-lg text-xs font-bold">
-                                          🔒 {task.user?.fullName} đã nhận
-                                      </div>
+                                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 text-slate-500 rounded-lg text-xs font-bold">🔒 {task.user?.fullName} đang làm</div>
                                   )}
                               </div>
 
-                              <div className="border-t border-slate-200 pt-3 mt-3">
-                                <div className="space-y-2 mb-2 max-h-32 overflow-y-auto">
+                              <div className="border-t border-slate-100 pt-3 mt-3">
+                                <div className="space-y-2 mb-3 max-h-48 overflow-y-auto scrollbar-thin pr-1 flex flex-col">
                                   {task.notes && task.notes.map(n => {
                                       const isAdmin = !n.userId;
-                                      const senderName = isAdmin ? "Sếp Tâm" : n.user?.fullName;
+                                      const senderName = isAdmin ? "Sếp Tâm" : n.user?.fullName.split(' ').pop();
                                       return (
-                                        <div key={n.id} className="text-[12px]">
+                                        <div key={n.id} className="text-[13px] leading-relaxed">
                                             <span className={`font-bold ${isAdmin ? 'text-red-600' : 'text-blue-600'}`}>{senderName}: </span>
-                                            <span className="text-slate-700">{n.content}</span>
+                                            <span className="text-slate-700 ml-1">{n.content}</span>
                                         </div>
                                       )
                                   })}
                                 </div>
                                 <input 
                                   type="text" 
-                                  placeholder="Gõ báo cáo / hỏi sếp rồi nhấn Enter..." 
-                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[12px] outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400 bg-white"
+                                  placeholder="Nhắn tin lại cho sếp để tắt chuông..." 
+                                  className={`w-full border rounded-xl px-3 py-2.5 text-[13px] outline-none focus:ring-2 bg-white shadow-sm transition-colors ${hasUnreadNote ? 'border-red-300 focus:ring-red-400 bg-red-50/50' : 'border-slate-200 focus:ring-blue-400'}`}
                                   onKeyDown={async (e) => {
                                       if (e.key === 'Enter') {
-                                          if (e.nativeEvent.isComposing) return; // CHỐNG DUP CHỮ KHI GÕ TIẾNG VIỆT
-                                          e.preventDefault();
-                                          
+                                          if (e.nativeEvent.isComposing) return;
                                           const val = e.target.value;
-                                          if (!val.trim()) return;
-                                          if (!currentUser?.id) return alert("Lỗi phiên đăng nhập, vui lòng tải lại trang!");
-                                          try {
-                                              const res = await fetch(`/api/tasks/${task.id}/notes`, {
-                                                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                                  body: JSON.stringify({ content: val, userId: parseInt(currentUser.id) })
-                                              });
-                                              if (res.ok) { e.target.value = ''; fetchData(); }
-                                          } catch (error) { alert("Lỗi gửi ghi chú!"); }
+                                          if (!val.trim() || !currentUser?.id) return;
+                                          e.target.value = '';
+                                          await fetch(`/api/tasks/${task.id}/notes`, {
+                                              method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ content: val, userId: parseInt(currentUser.id) })
+                                          });
+                                          fetchData();
                                       }
                                   }}
                                 />
                               </div>
-
                             </div>
                           </div>
                           );
@@ -275,14 +281,9 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
           )}
         </div>
         
-        <div className="pb-6 text-center text-[11px] font-medium text-slate-400 flex items-center justify-center gap-1 bg-slate-50">
-          <span>© {new Date().getFullYear()} Workspace Management.</span>
-          <span>Crafted with <span className="text-red-500">❤️</span> by</span>
-          <span className="font-bold text-slate-600 hover:text-orange-600 cursor-pointer transition-colors">
-            Hoàng Phúc (Sol)
-          </span>
+        <div className="pb-6 text-center text-[10px] font-medium text-slate-400 bg-slate-50">
+           © {new Date().getFullYear()} Workspace Management - Crafted by Hoàng Phúc (Sol)
         </div>
-
       </div>
     </div>
   );

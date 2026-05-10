@@ -128,10 +128,18 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-3 flex justify-between items-center sticky top-0 z-40">
-        <div className="flex items-center gap-2">
+        
+        {/* --- ĐÃ NÂNG CẤP: LOGO CÓ THỂ BẤM ĐỂ PHÁT TÍN HIỆU QUAY LẠI --- */}
+        <div 
+          onClick={() => window.dispatchEvent(new Event('goHome'))}
+          className="flex items-center gap-2 cursor-pointer hover:opacity-70 transition-opacity"
+          title="Quay lại danh sách dự án"
+        >
           <div className="w-8 h-8 bg-blue-600 text-white rounded flex items-center justify-center font-bold">V</div>
           <h1 className="text-xl font-black text-blue-900 tracking-wider">WORKSPACE</h1>
         </div>
+        {/* ----------------------------------------------------------- */}
+
         <div className="flex items-center gap-6">
           <div className="text-right">
             <p className="font-bold text-slate-800 leading-tight">{user.fullName}</p>
@@ -147,7 +155,6 @@ export default function App() {
         {(user.role === 'admin' || user.role === 'ADMIN') ? (
           <AdminDashboard />
         ) : (
-          // HIỂN THỊ MÀN HÌNH CHỌN DỰ ÁN CỦA NHÂN VIÊN Ở ĐÂY
           <EmployeeDashboard currentUser={user} />
         )}
       </main>
