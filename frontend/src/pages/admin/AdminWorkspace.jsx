@@ -55,6 +55,48 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
     }
   }, [rooms]);
 
+  // --- TÍNH NĂNG MỚI: PASTE (DÁN) ẢNH TỪ CLIPBOARD (Ctrl+V) ---
+  useEffect(() => {
+    const handleGlobalPaste = (e) => {
+        // Kiểm tra xem trong bộ nhớ tạm (clipboard) có chứa file ảnh không
+        const hasImage = Array.from(e.clipboardData.items).some(item => item.type.startsWith('image/'));
+        if (!hasImage) return; // Nếu họ dán chữ text bình thường thì bỏ qua, cho text hoạt động tự nhiên
+
+        const items = e.clipboardData.items;
+        for (let item of items) {
+            if (item.type.startsWith('image/')) {
+                const blob = item.getAsFile();
+                // Tạo một file mới với tên hệ thống tự cấp để upload
+                const file = new File([blob], `anh-dan-nhanh-${Date.now()}.png`, { type: item.type });
+                
+                if (editingTask) {
+                    // Nếu đang mở khung Edit, thì gán file dán vào khung Edit
+                    setEditFile(file);
+                } else {
+                    // Nếu đang ở màn hình ngoài, gán vào khung Tạo việc mới
+                    setSelectedFile(file);
+                    
+                    // Code ma thuật: Ép thẻ <input type="file"> hiển thị tên file vừa dán
+                    const fileInput = document.getElementById('file-upload');
+                    if (fileInput) {
+                        const dataTransfer = new DataTransfer();
+                        dataTransfer.items.add(file);
+                        fileInput.files = dataTransfer.files;
+                    }
+                }
+                
+                // Chặn hành vi dán mặc định của trình duyệt để không dán bậy vào ô ghi chú
+                e.preventDefault();
+                break;
+            }
+        }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, [editingTask]); // Phụ thuộc vào editingTask để phân luồng dán đúng chỗ
+  // -------------------------------------------------------------
+
   const handleAssignTask = async () => {
     if (!roomId) return alert("Vui lòng tạo phòng trước khi thêm file cắt!");
     try {
@@ -89,6 +131,7 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
           const selectedRoom = rooms.find(r => r.id === editingTask.roomId);
           formData.append('projectName', project.name);
           formData.append('roomName', selectedRoom ? selectedRoom.name : 'Unknown');
+          
           if (editFile) formData.append('file', editFile);
 
           const response = await fetch(`/api/tasks/${editingTask.id}`, { method: 'PUT', body: formData });
@@ -173,7 +216,8 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
               <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Dặn dò thợ..." className="w-full border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div className="space-y-1 lg:col-span-1">
-              <label className="text-[11px] font-bold text-slate-500 uppercase ml-1">File (Tùy chọn)</label>
+              {/* Đã thêm hướng dẫn Ctrl+V vào chữ File */}
+              <label className="text-[11px] font-bold text-slate-500 uppercase ml-1 text-blue-600">File (Hỗ trợ Ctrl+V)</label>
               <input id="file-upload" type="file" onChange={(e) => setSelectedFile(e.target.files[0])} className="w-full border border-slate-200 rounded-xl p-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer transition" />
             </div>
           </div>
@@ -279,12 +323,28 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
                             
                             <div className="min-w-0 flex-1">
                               {editingTask?.id === task.id ? (
-                                  <div className="bg-slate-50 p-2 rounded-lg border border-blue-200 space-y-2">
-                                      <input value={editingTask.material || ''} onChange={e => setEditingTask({...editingTask, material: e.target.value})} className="w-full text-xs p-2 border rounded" placeholder="Vật liệu..." />
-                                      <input value={editingTask.title || ''} onChange={e => setEditingTask({...editingTask, title: e.target.value})} className="w-full text-xs p-2 border rounded" placeholder="Tên vách..." />
-                                      <div className="flex gap-2">
-                                          <button onClick={handleSaveEdit} className="bg-blue-600 text-white px-3 py-1 rounded text-[10px] font-bold">Lưu</button>
-                                          <button onClick={() => setEditingTask(null)} className="bg-slate-200 text-slate-600 px-3 py-1 rounded text-[10px] font-bold">Hủy</button>
+                                  <div className="bg-slate-50 p-2.5 rounded-lg border border-blue-200 space-y-2 shadow-inner">
+                                      <input value={editingTask.material || ''} onChange={e => setEditingTask({...editingTask, material: e.target.value})} className="w-full text-xs p-2 border border-slate-200 rounded outline-none focus:border-blue-400" placeholder="Vật liệu (Tùy chọn)..." />
+                                      <input value={editingTask.title || ''} onChange={e => setEditingTask({...editingTask, title: e.target.value})} className="w-full text-xs p-2 border border-slate-200 rounded outline-none focus:border-blue-400" placeholder="Tên vách (Tùy chọn)..." />
+                                      
+                                      <div className="mt-2 p-2 bg-white border border-slate-200 rounded">
+                                          {/* Gợi ý Ctrl+V vào ô cập nhật */}
+                                          <label className="text-[10px] font-bold text-blue-600 uppercase block mb-1">Cập nhật File (Nhấn Ctrl+V dán nhanh)</label>
+                                          <input 
+                                              type="file" 
+                                              onChange={e => setEditFile(e.target.files[0])} 
+                                              className="w-full text-[10px] outline-none file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:font-bold file:bg-slate-100 file:text-slate-600 hover:file:bg-slate-200 cursor-pointer" 
+                                          />
+                                          {editFile ? (
+                                              <p className="text-[10px] text-green-600 font-bold mt-1 truncate">✓ Đã dán/chọn: {editFile.name}</p>
+                                          ) : (
+                                              <p className="text-[9px] text-slate-400 italic mt-1">Bỏ qua nếu giữ bản vẽ cũ.</p>
+                                          )}
+                                      </div>
+
+                                      <div className="flex gap-2 pt-1">
+                                          <button onClick={handleSaveEdit} className="bg-blue-600 text-white px-3 py-1.5 rounded text-[11px] font-bold hover:bg-blue-700 shadow-sm">Lưu thay đổi</button>
+                                          <button onClick={() => { setEditingTask(null); setEditFile(null); }} className="bg-slate-200 text-slate-600 px-3 py-1.5 rounded text-[11px] font-bold hover:bg-slate-300">Hủy</button>
                                       </div>
                                   </div>
                               ) : (
@@ -303,7 +363,6 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
                                 <p className="truncate">File: {task.filePath ? <span className="text-blue-500 font-bold">{formatFileName(task.filePath)}</span> : '---'}</p>
                                 {task.userId && <p className="font-bold text-slate-700">Thợ: {task.user?.fullName}</p>}
                                 
-                                {/* --- ĐÃ NÂNG CẤP LẠI NÚT TRẠNG THÁI CHO NỔI BẬT --- */}
                                 <div className="pt-1">
                                     {task.status === 'DONE' ? (
                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-500 text-white rounded-md text-[10px] font-bold uppercase shadow-sm">
@@ -319,7 +378,6 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
                                         </span>
                                     )}
                                 </div>
-                                {/* ------------------------------------------------ */}
                                 
                               </div>
 
