@@ -1,4 +1,4 @@
-# 🚀 Workspace Management - Hệ Thống Quản Lý Xưởng CNC
+# 🚀 Workspace Management
 
 Hệ thống quản lý quy trình sản xuất nội bộ chuyên dụng dành cho các xưởng cắt CNC và gia công. Dự án giúp số hóa quy trình giao việc, nhận việc và báo cáo tiến độ giữa Sếp (Admin) và Nhân viên (Thợ) một cách trực quan, nhanh chóng, ngay trong mạng nội bộ (LAN).
 
