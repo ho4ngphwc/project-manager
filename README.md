@@ -32,8 +32,4 @@ Hệ thống được đóng gói hoàn toàn bằng Docker, tối ưu cho việ
 * Đã cài đặt [Docker](https://www.docker.com/) và Docker Compose trên máy chủ.
 
 ### 2. Cấu hình môi trường
-Tạo file `.env` tại thư mục gốc của dự án:
-```env
-PORT=3000
-DATABASE_URL="postgresql://user:password@db:5432/cnc_db"
-# (Cập nhật chuỗi kết nối tùy theo DB thực tế)
+* Truy cập container chạy file `seed.js` tại folder `prisma`
