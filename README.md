@@ -1,10 +1,6 @@
 # 🚀 Workspace Management
 
-<<<<<<< HEAD
 Hệ thống quản lý quy trình sản xuất nội bộ chuyên dụng dành cho các xưởng cắt CNC và gia công. Dự án giúp số hóa quy trình giao việc, nhận việc và báo cáo tiến độ giữa Admin và Nhân viên một cách trực quan, nhanh chóng, ngay trong mạng nội bộ (LAN).
-=======
-Hệ thống quản lý quy trình sản xuất nội bộ chuyên dụng dành cho các xưởng cắt CNC và gia công. Dự án giúp số hóa quy trình giao việc, nhận việc và báo cáo tiến độ giữa Sếp (Admin) và Nhân viên (Thợ) một cách trực quan, nhanh chóng, ngay trong mạng nội bộ (LAN).
->>>>>>> de05c2d1aa6351407d7f1f4ce7283bd12bd95d0a
 
 ## ✨ Tính năng nổi bật
 
@@ -37,9 +33,7 @@ Hệ thống được đóng gói hoàn toàn bằng Docker, tối ưu cho việ
 
 ### 2. Cấu hình môi trường
 * Truy cập container chạy file `seed.js` tại folder `prisma`
-<<<<<<< HEAD
 
 ### 3. Credential mặc định cho admin 
 * `admin@example.com:SuperSecretPassword@2026!`
-=======
->>>>>>> de05c2d1aa6351407d7f1f4ce7283bd12bd95d0a
+
