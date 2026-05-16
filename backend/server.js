@@ -1,6 +1,7 @@
+// FILE: server.js
 require('dotenv').config();
-const express = require('express'); 
-const cors = require('cors'); 
+const express = require('express');
+const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
@@ -8,7 +9,7 @@ const fs = require('fs');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const projectRoutes = require('./routes/projectRoutes');
-const taskRoutes = require('./routes/taskRoutes'); 
+const taskRoutes = require('./routes/taskRoutes');
 
 const app = express();
 
@@ -19,12 +20,12 @@ app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const uploadDir = path.join(__dirname, 'uploads');
-if(!fs.existsSync(uploadDir)) {
+if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
 const storage = multer.diskStorage({
-    destination: function(req, file, cb) {
+    destination: function (req, file, cb) {
         cb(null, 'uploads/')
     },
     filename: function (req, file, cb) {
@@ -41,13 +42,12 @@ app.post('/api/uploads', upload.single('file'), (req, res) => {
     res.json({ fileUrl: `/uploads/${req.file.filename}` });
 });
 
-//. app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use('/api', authRoutes); // tạo ra /api/login
-app.use('/api/users', userRoutes); // tạo ra /api/users/create, /api/user/employees,...
-app.use('/api/projects', projectRoutes); // tạo ra /api/projects
-app.use('/api/tasks', taskRoutes); // tạo ra /api/tasks
+app.use('/api', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/tasks', taskRoutes);
 
-const PORT = process.env.PORT || 3000; 
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server đang chạy tại port ${PORT}`);
     console.log(`Các API đã được nạp thành công!`);

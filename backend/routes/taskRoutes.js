@@ -36,10 +36,10 @@ const storage = multer.diskStorage({
         const originalName = file.originalname || "";
         const extension = path.extname(originalName);
         const baseName = path.basename(originalName, extension);
-        
+
         const safeFileName = removeVietnameseTones(baseName);
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        
+
         cb(null, uniqueSuffix + '-' + safeFileName + extension);
     }
 });
@@ -54,8 +54,8 @@ const upload = multer({ storage: storage });
 router.get('/', async (req, res) => {
     try {
         const tasks = await prisma.task.findMany({
-            include: { 
-                user: true, 
+            include: {
+                user: true,
                 room: true,
                 notes: { include: { user: true }, orderBy: { createdAt: 'asc' } }
             }
@@ -104,25 +104,37 @@ router.post('/', upload.single('file'), async (req, res) => {
     }
 });
 
-// --- API 3: CẬP NHẬT TRẠNG THÁI (ĐÃ NÂNG CẤP ĐỂ HỨNG FILE) ---
+// --- API 3: CẬP NHẬT TRẠNG THÁI (ĐÃ NÂNG CẤP ĐỂ HỨNG FILE, CHUYỂN USER & GHI GIỜ XONG) ---
 router.put('/:id', upload.single('file'), async (req, res) => {
     const { id } = req.params;
     try {
-        // Lấy dữ liệu gửi lên (có thể là trạng thái json, hoặc form data)
         const updateData = { ...req.body };
 
-        // Xóa rác: 2 biến này chỉ dùng để định hướng thư mục, không lưu vào database
         delete updateData.projectName;
         delete updateData.roomName;
 
-        // Nếu admin có đính kèm file mới thì chèn đường link mới
+        if ('userId' in updateData) {
+            if (updateData.userId === "" || updateData.userId === "null" || updateData.userId === null) {
+                updateData.userId = null;
+            } else {
+                updateData.userId = parseInt(updateData.userId);
+            }
+        }
+
+        // --- TỰ ĐỘNG GHI NHẬN THỜI GIAN HOÀN THÀNH ---
+        if (updateData.status === 'DONE') {
+            updateData.completedAt = new Date(); // Đóng dấu thời gian xong
+        } else if (updateData.status && updateData.status !== 'DONE') {
+            updateData.completedAt = null; // Xóa dấu nếu hoàn tác
+        }
+
         if (req.file) {
             updateData.filePath = req.file.path.replace(/\\/g, '/');
         }
 
         const updatedTask = await prisma.task.update({
             where: { id: parseInt(id) },
-            data: updateData 
+            data: updateData
         });
         res.json(updatedTask);
     } catch (error) {
@@ -149,15 +161,33 @@ router.post('/:id/notes', async (req, res) => {
         const { content, userId } = req.body;
         const noteData = {
             content: content,
-            task: { connect: { id: parseInt(id) }}
+            task: { connect: { id: parseInt(id) } }
         };
         if (userId && userId !== "null" && userId !== "") {
-            noteData.user = { connect: { id: parseInt(userId) }};
+            noteData.user = { connect: { id: parseInt(userId) } };
         }
         const newNote = await prisma.note.create({ data: noteData });
         res.json(newNote);
     } catch (error) {
         res.status(500).json({ error: "Không thể gửi phản hồi!" });
+    }
+});
+
+// --- API 6: THẢ TIM / XÁC NHẬN BÌNH LUẬN ---
+router.put('/:taskId/notes/:noteId/like', async (req, res) => {
+    try {
+        const { noteId } = req.params;
+        const { isLiked } = req.body;
+
+        const updatedNote = await prisma.note.update({
+            where: { id: parseInt(noteId) },
+            data: { isLiked: isLiked }
+        });
+
+        res.json(updatedNote);
+    } catch (error) {
+        console.error("Lỗi thả tim:", error);
+        res.status(500).json({ error: "Không thể thả tim!" });
     }
 });
 

@@ -55,6 +55,9 @@ model Task {
   filePath   String   
   status     String   @default("TODO") 
   createdAt  DateTime @default(now())
+
+  completedAt DateTime?
+
   updatedAt  DateTime @updatedAt
 
   note       String? 
@@ -77,6 +80,8 @@ model Note {
   id        Int      @id @default(autoincrement())
   content   String
   createdAt DateTime @default(now())
+
+  isLiked   Boolean @default(false)
 
   taskId    Int
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)

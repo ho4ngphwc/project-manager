@@ -1,13 +1,13 @@
-import React, { useState } from 'react'; 
-import { Trash2, Edit3, Clock, Filter } from 'lucide-react'; // Đã gỡ ExternalLink
+import React, { useState } from 'react';
+import { Trash2, Edit3, Clock, Filter, MessageSquare, Bell } from 'lucide-react'; // Đã thêm MessageSquare và Bell
 
 export default function AdminOverview({ projects, tasks, employees, fetchData, onOpenProject }) {
-    const [newProjectName, setNewProjectName] = useState(''); 
+    const [newProjectName, setNewProjectName] = useState('');
     const [newUserName, setNewUserName] = useState('');
-    const [newUserEmail, setNewUserEmail] = useState(''); 
-    
+    const [newUserEmail, setNewUserEmail] = useState('');
+
     // --- BỘ LỌC DỰ ÁN ---
-    const [projectFilter, setProjectFilter] = useState('DANG_LAM'); 
+    const [projectFilter, setProjectFilter] = useState('DANG_LAM');
 
     const handleCreateProject = async () => {
         if (!newProjectName) return alert('Vui lòng nhập tên dự án!');
@@ -51,7 +51,7 @@ export default function AdminOverview({ projects, tasks, employees, fetchData, o
     };
 
     const handleAssignUser = async (projectId, value) => {
-        if (!value) return; 
+        if (!value) return;
         let userIdsToAssign = value === 'ALL' ? employees.map(emp => emp.id) : [parseInt(value)];
         if (value === 'ALL' && !window.confirm(`Thêm TẤT CẢ ${employees.length} nhân viên?`)) return;
 
@@ -65,7 +65,7 @@ export default function AdminOverview({ projects, tasks, employees, fetchData, o
     };
 
     const handleRemoveMember = async (projectId, userId, userName) => {
-        if (!window.confirm(`Gỡ "${userName}" khỏi dự án?`)) return; 
+        if (!window.confirm(`Gỡ "${userName}" khỏi dự án?`)) return;
         try {
             const res = await fetch(`/api/projects/${projectId}/members/${userId}`, { method: 'DELETE' });
             if (res.ok) fetchData();
@@ -91,12 +91,27 @@ export default function AdminOverview({ projects, tasks, employees, fetchData, o
         } catch (error) { alert("Lỗi kết nối!"); }
     };
 
+    // --- HÀM KIỂM TRA TIN NHẮN CHƯA ĐỌC CỦA DỰ ÁN ---
+    const checkUnreadMessages = (projectId) => {
+        // Lấy tất cả công việc của dự án này
+        const projectTasks = tasks?.filter(t => t.projectId === projectId) || [];
+
+        // Kiểm tra xem có task nào có tin nhắn cuối cùng là của nhân viên không
+        return projectTasks.some(task => {
+            if (!task.notes || task.notes.length === 0) return false;
+            // Lấy tin nhắn cuối cùng (mới nhất)
+            const lastNote = task.notes[task.notes.length - 1];
+            // Nếu userId có tồn tại (khác null) -> Có nghĩa là nhân viên nhắn, Sếp chưa rep
+            return lastNote.userId !== null && lastNote.userId !== undefined;
+        });
+    };
+
     const filteredProjects = projects.filter(p => {
         if (projectFilter === 'ALL') return true;
         if (projectFilter === 'DANG_LAM') return p.status !== 'Đã hoàn thành';
         if (projectFilter === 'HOAN_THANH') return p.status === 'Đã hoàn thành';
         return true;
-    }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); 
+    }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     return (
         <div className="space-y-6 p-4">
@@ -112,14 +127,14 @@ export default function AdminOverview({ projects, tasks, employees, fetchData, o
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                             <h3 className="font-bold text-xl flex items-center gap-2">📂 Danh Sách Dự Án</h3>
-                            
+
                             <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
                                 <button onClick={() => setProjectFilter('DANG_LAM')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${projectFilter === 'DANG_LAM' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Đang làm</button>
                                 <button onClick={() => setProjectFilter('HOAN_THANH')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${projectFilter === 'HOAN_THANH' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Hoàn thành</button>
                                 <button onClick={() => setProjectFilter('ALL')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${projectFilter === 'ALL' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Tất cả</button>
                             </div>
                         </div>
-                        
+
                         <div className="flex gap-2 mb-8">
                             <input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} className="flex-1 p-3 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" placeholder="Tên dự án mới..." />
                             <button onClick={handleCreateProject} className="bg-blue-600 text-white px-8 rounded-xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-200">+ Tạo Dự Án</button>
@@ -131,61 +146,69 @@ export default function AdminOverview({ projects, tasks, employees, fetchData, o
                                     <p className="text-slate-400 font-medium">Không tìm thấy dự án nào trong mục này.</p>
                                 </div>
                             ) : (
-                                filteredProjects.map(p => (
-                                    <div key={p.id} className={`p-5 border-2 rounded-2xl transition-all bg-white shadow-sm hover:shadow-md ${p.status === 'Đã hoàn thành' ? 'border-green-100 opacity-80' : 'border-slate-50 hover:border-blue-200'}`}>
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-2">
-                                                    {/* --- ĐÃ NÂNG CẤP: BẤM VÀO TÊN ĐỂ MỞ DỰ ÁN --- */}
-                                                    <h4 onClick={() => onOpenProject(p)} className={`font-bold text-lg cursor-pointer transition-colors ${p.status === 'Đã hoàn thành' ? 'text-slate-500 line-through' : 'text-slate-800 hover:text-blue-600'}`}>{p.name}</h4>
-                                                    <button onClick={() => handleEditProject(p.id, p.name)} className="text-slate-400 hover:text-blue-500"><Edit3 size={14}/></button>
+                                filteredProjects.map(p => {
+                                    const hasUnread = checkUnreadMessages(p.id); // Kiểm tra tin nhắn của dự án này
+
+                                    return (
+                                        <div key={p.id} className={`p-5 border-2 rounded-2xl transition-all bg-white shadow-sm hover:shadow-md ${p.status === 'Đã hoàn thành' ? 'border-green-100 opacity-80' : hasUnread ? 'border-red-200 bg-red-50/20' : 'border-slate-50 hover:border-blue-200'}`}>
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div className="flex-1">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        {/* --- TÊN DỰ ÁN --- */}
+                                                        <h4 onClick={() => onOpenProject(p)} className={`font-bold text-lg cursor-pointer transition-colors ${p.status === 'Đã hoàn thành' ? 'text-slate-500 line-through' : 'text-slate-800 hover:text-blue-600'}`}>{p.name}</h4>
+
+                                                        {/* --- NÚT BÁO CÓ TIN NHẮN MỚI --- */}
+                                                        {hasUnread && (
+                                                            <span onClick={() => onOpenProject(p)} className="flex items-center gap-1 bg-red-100 text-red-600 text-[10px] font-bold px-2.5 py-0.5 rounded-full animate-pulse border border-red-200 cursor-pointer shadow-sm">
+                                                                <Bell size={12} className="animate-bounce" /> Có tin nhắn mới
+                                                            </span>
+                                                        )}
+
+                                                        <button onClick={() => handleEditProject(p.id, p.name)} className="text-slate-400 hover:text-blue-500 ml-1"><Edit3 size={14} /></button>
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-1"><Clock size={10} /> {new Date(p.createdAt).toLocaleString('vi-VN')}</p>
                                                 </div>
-                                                <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-1"><Clock size={10}/> {new Date(p.createdAt).toLocaleString('vi-VN')}</p>
-                                            </div>
-                                            <select value={p.status} onChange={(e) => handleStatusChange(p.id, e.target.value)} className={`text-[10px] font-bold px-2 py-1 rounded-lg border-none outline-none cursor-pointer ${p.status === 'Đã hoàn thành' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
-                                                <option value="Đang làm">ĐANG LÀM</option>
-                                                <option value="Đã hoàn thành">HOÀN THÀNH</option>
-                                            </select>
-                                        </div>
-
-                                        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-50">
-                                            <div className="flex -space-x-2 flex-1">
-                                                {p.members?.map(m => (
-                                                    <button 
-                                                        key={m.id} 
-                                                        title={`Gỡ ${m.fullName}`} 
-                                                        onClick={() => handleRemoveMember(p.id, m.id, m.fullName)}
-                                                        className="w-7 h-7 rounded-full bg-blue-500 hover:bg-red-500 text-white border-2 border-white flex items-center justify-center text-[10px] font-bold transition-all hover:z-10 hover:scale-110 relative cursor-pointer"
-                                                    >
-                                                        {m.fullName.charAt(0)}
-                                                    </button>
-                                                ))}
-                                                
-                                                {/* --- GIỮ NGUYÊN NÚT THÊM NHÂN VIÊN GỐC CỦA BÁC --- */}
-                                                <select
-                                                    value=""
-                                                    onChange={(e) => handleAssignUser(p.id, e.target.value)}
-                                                    // Sửa css một tí xíu: Bỏ 'flex' đi để cái chữ + không bị méo thành dấu - nữa
-                                                    className="w-7 h-7 rounded-full bg-slate-100 border-2 border-dashed border-slate-300 text-slate-400 cursor-pointer outline-none appearance-none text-center hover:bg-slate-200"
-                                                    title="Thêm nhân viên"
-                                                >
-                                                    <option value="" disabled>+</option>
-                                                    <option value="ALL" className="font-bold text-blue-600 bg-blue-50">
-                                                        Thêm TẤT CẢ ({employees.length} người)
-                                                    </option>
-
-                                                    <option disabled>----------------------</option>
-                                                    {employees.map(e => <option key={e.id} value={e.id}>{e.fullName}</option>)}
+                                                <select value={p.status} onChange={(e) => handleStatusChange(p.id, e.target.value)} className={`text-[10px] font-bold px-2 py-1 rounded-lg border-none outline-none cursor-pointer ${p.status === 'Đã hoàn thành' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                    <option value="Đang làm">ĐANG LÀM</option>
+                                                    <option value="Đã hoàn thành">HOÀN THÀNH</option>
                                                 </select>
-                                                {/* ----------------------------------------------- */}
                                             </div>
-                                            
-                                            <div className="flex gap-1">
-                                                <button onClick={() => handleDeleteProject(p.id, p.name)} className="p-2 text-slate-300 hover:text-red-500 transition"><Trash2 size={16}/></button>
+
+                                            <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-50">
+                                                <div className="flex -space-x-2 flex-1">
+                                                    {p.members?.map(m => (
+                                                        <button
+                                                            key={m.id}
+                                                            title={`Gỡ ${m.fullName}`}
+                                                            onClick={() => handleRemoveMember(p.id, m.id, m.fullName)}
+                                                            className="w-7 h-7 rounded-full bg-blue-500 hover:bg-red-500 text-white border-2 border-white flex items-center justify-center text-[10px] font-bold transition-all hover:z-10 hover:scale-110 relative cursor-pointer"
+                                                        >
+                                                            {m.fullName.charAt(0)}
+                                                        </button>
+                                                    ))}
+
+                                                    <select
+                                                        value=""
+                                                        onChange={(e) => handleAssignUser(p.id, e.target.value)}
+                                                        className="w-7 h-7 rounded-full bg-slate-100 border-2 border-dashed border-slate-300 text-slate-400 cursor-pointer outline-none appearance-none text-center hover:bg-slate-200"
+                                                        title="Thêm nhân viên"
+                                                    >
+                                                        <option value="" disabled>+</option>
+                                                        <option value="ALL" className="font-bold text-blue-600 bg-blue-50">
+                                                            Thêm TẤT CẢ ({employees.length} người)
+                                                        </option>
+                                                        <option disabled>----------------------</option>
+                                                        {employees.map(e => <option key={e.id} value={e.id}>{e.fullName}</option>)}
+                                                    </select>
+                                                </div>
+
+                                                <div className="flex gap-1">
+                                                    <button onClick={() => handleDeleteProject(p.id, p.name)} className="p-2 text-slate-300 hover:text-red-500 transition"><Trash2 size={16} /></button>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
                     </div>
@@ -199,7 +222,7 @@ export default function AdminOverview({ projects, tasks, employees, fetchData, o
                             <input value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} className="w-full p-3 bg-slate-50 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500" placeholder="Email..." />
                             <button onClick={handleCreateUser} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-black transition">Tạo (Pass: 123456)</button>
                         </div>
-                        
+
                         <div className="mt-6 pt-6 border-t border-slate-100">
                             <p className="text-sm font-bold text-slate-500 mb-3">Đội ngũ ({employees.length})</p>
                             <div className="flex flex-wrap gap-2">

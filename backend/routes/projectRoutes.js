@@ -1,34 +1,34 @@
-const express = require('express'); 
-const { PrismaClient } = require('@prisma/client'); 
+const express = require('express');
+const { PrismaClient } = require('@prisma/client');
 
 const router = express.Router();
-const prisma = new PrismaClient(); 
+const prisma = new PrismaClient();
 
-// 1. Lấy danh sách project (Bổ sung include members để hiện thợ ở ngoài)
+// 1. Lấy danh sách project (Bổ sung include members để hiện nhân viên ở ngoài)
 router.get('/', async (req, res) => {
     try {
         const projects = await prisma.project.findMany({
             orderBy: { createdAt: 'desc' },
-            include: { 
+            include: {
                 rooms: true,
-                members: true // ✅ Thêm cái này để frontend hiện avatar thợ
+                members: true // ✅ Thêm cái này để frontend hiện avatar nhân viên
             }
         });
         res.json(projects);
     }
     catch (error) {
         console.error("Lỗi GET projects:", error);
-        res.status(500).json({ error: 'Lỗi lấy danh sách dự án!'});
+        res.status(500).json({ error: 'Lỗi lấy danh sách dự án!' });
     }
 });
 
 // 2. Tạo dự án mới
 router.post('/', async (req, res) => {
     // ✅ SỬA: Phải lấy cả memberIds từ body gửi lên
-    const { name, memberIds } = req.body; 
-    
-    if (!name) return res.status(400).json({ error: "Vui lòng nhập tên dự án!"});
-    
+    const { name, memberIds } = req.body;
+
+    if (!name) return res.status(400).json({ error: "Vui lòng nhập tên dự án!" });
+
     try {
         const newProject = await prisma.project.create({
             data: {
@@ -36,11 +36,11 @@ router.post('/', async (req, res) => {
                 status: "Đang làm",
                 // ✅ SỬA: Check memberIds an toàn
                 members: {
-                    connect: (memberIds && Array.isArray(memberIds)) 
-                             ? memberIds.map(id => ({ id: parseInt(id) })) 
-                             : []
+                    connect: (memberIds && Array.isArray(memberIds))
+                        ? memberIds.map(id => ({ id: parseInt(id) }))
+                        : []
                 }
-            }, 
+            },
             include: {
                 members: true
             }
@@ -49,7 +49,7 @@ router.post('/', async (req, res) => {
     }
     catch (error) {
         console.error("Lỗi POST project:", error); // Log ra để debug
-        res.status(500).json({ error : "Lỗi tạo dự án!" });
+        res.status(500).json({ error: "Lỗi tạo dự án!" });
     }
 });
 
@@ -62,28 +62,28 @@ router.post('/:id/rooms', async (req, res) => {
             data: { name, projectId }
         });
         res.json(newRoom);
-    } catch(error) { 
-        res.status(500).json({ error: "Lỗi tạo phòng!" }); 
+    } catch (error) {
+        res.status(500).json({ error: "Lỗi tạo phòng!" });
     }
 });
 
 // Trạng thái project
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
-    const { name, status } = req.body; 
+    const { name, status } = req.body;
 
     try {
         const updatedProject = await prisma.project.update({
             where: { id: parseInt(id) },
             data: {
-                name: name, 
+                name: name,
                 status: status
             }
         });
         res.json(updatedProject);
     } catch (error) {
         console.error("Lỗi cập nhật dự án: ", error);
-        res.status(500).json({ error: "Không thể cập nhật dự án!"});
+        res.status(500).json({ error: "Không thể cập nhật dự án!" });
     }
 });
 
@@ -93,12 +93,12 @@ router.post('/:projectId/assign', async (req, res) => {
     const { userIds } = req.body;
 
     if (!userIds || !Array.isArray(userIds)) {
-        return res.status(400).json({ error: "Dữ liệu không hợp lệ"});
+        return res.status(400).json({ error: "Dữ liệu không hợp lệ" });
     }
 
     try {
         const connectData = userIds.map(id => ({ id: parseInt(id) }))
-        ; 
+            ;
         const updated = await prisma.project.update({
             where: { id: parseInt(projectId) },
             data: {
@@ -116,7 +116,7 @@ router.post('/:projectId/assign', async (req, res) => {
 
 // gỡ nhân viên khỏi dự án 
 router.delete('/:projectId/members/:userId', async (req, res) => {
-    const { projectId, userId } = req.params; 
+    const { projectId, userId } = req.params;
 
     try {
         const updatedProject = await prisma.project.update({
@@ -129,21 +129,21 @@ router.delete('/:projectId/members/:userId', async (req, res) => {
             include: { members: true }
         });
         res.json({ message: "Đã gỡ nhân viên thành công!", project: updatedProject });
-    } 
+    }
     catch (error) {
         console.error("Lỗi khi gỡ nhân viên: ", error);
-        res.status(500).json({ error: "Không thể gỡ nhân viên khỏi dự án!"});
+        res.status(500).json({ error: "Không thể gỡ nhân viên khỏi dự án!" });
     }
 });
 
 // Xóa dự án
 router.delete('/:id', async (req, res) => {
-    const { id } = req.params; 
+    const { id } = req.params;
     try {
         await prisma.project.delete({
-            where : { id: parseInt(id) }
+            where: { id: parseInt(id) }
         });
-        res.json({ message: "Đã xoá dự án thành công!"});
+        res.json({ message: "Đã xoá dự án thành công!" });
     } catch (error) {
         console.error("Lỗi xoá dự án:", error);
         res.status(500).json({ error: "Thất bại khi xoá dự án!" });
@@ -152,17 +152,17 @@ router.delete('/:id', async (req, res) => {
 
 // Api xoá phòng
 router.delete('/:projectId/rooms/:roomId', async (req, res) => {
-    const { roomId } = req.params; 
+    const { roomId } = req.params;
 
-    try { 
+    try {
         await prisma.room.delete({
             where: { id: parseInt(roomId) }
         });
-        res.json({ message: "Đã xoá phòng thành công!"});
+        res.json({ message: "Đã xoá phòng thành công!" });
     }
     catch (error) {
         console.error("Lỗi xoá phòng ở Backend:", error);
-        res.status(500).json({ error: "Lỗi hệ thống khi xoá phòng!"});
+        res.status(500).json({ error: "Lỗi hệ thống khi xoá phòng!" });
     }
 });
 
