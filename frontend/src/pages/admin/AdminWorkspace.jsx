@@ -343,11 +343,20 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
                   return 0;
                 });
 
+                // TÍNH TOÁN MATERIAL SUMMARY MỚI Ở ĐÂY
                 const materialSummary = {};
                 roomTasks.forEach(task => {
                   const mat = task.material || 'Khác';
-                  if (!materialSummary[mat]) materialSummary[mat] = { chuaNhan: 0, dangLam: 0, daCat: 0 };
-                  if (task.status === 'DONE') materialSummary[mat].daCat++;
+                  if (!materialSummary[mat]) materialSummary[mat] = { chuaNhan: 0, dangLam: 0, daCat: 0, lastCompletedAt: null };
+                  
+                  if (task.status === 'DONE') {
+                    materialSummary[mat].daCat++;
+                    if (task.completedAt) {
+                      if (!materialSummary[mat].lastCompletedAt || new Date(task.completedAt) > new Date(materialSummary[mat].lastCompletedAt)) {
+                        materialSummary[mat].lastCompletedAt = task.completedAt;
+                      }
+                    }
+                  }
                   else if (task.userId) materialSummary[mat].dangLam++;
                   else materialSummary[mat].chuaNhan++;
                 });
@@ -374,6 +383,13 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
                                 <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isAllDone ? 'bg-green-400' : 'bg-slate-400'}`}></span>
                                 <div className="flex-1">
                                   <span className="font-bold">{mat}:</span> {materialSummary[mat].chuaNhan} chưa nhận, {materialSummary[mat].dangLam} đang làm, {materialSummary[mat].daCat} đã xong
+                                  
+                                  {/* RENDER THỜI GIAN HOÀN THÀNH TẠI ĐÂY */}
+                                  {materialSummary[mat].daCat > 0 && materialSummary[mat].lastCompletedAt && (
+                                    <span className={`ml-1 font-medium ${isAllDone ? 'text-slate-400' : 'text-green-600'}`}>
+                                      (lúc {formatDateTime(materialSummary[mat].lastCompletedAt)})
+                                    </span>
+                                  )}
                                 </div>
                               </li>
                             )
@@ -499,7 +515,6 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
                                               {!n.userId ? 'Sếp' : n.user?.fullName.split(' ').pop()}:
                                             </span>
 
-                                            {/* --- ĐÃ HIỂN THỊ THỜI GIAN NHẮN Ở ĐÂY CHO ADMIN --- */}
                                             <span className="text-[10px] text-slate-400 font-normal ml-1.5">({formatDateTime(n.createdAt)})</span>
 
                                             {isImageNote ? (
