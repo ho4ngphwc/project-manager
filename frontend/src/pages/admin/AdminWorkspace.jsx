@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, FolderPlus, Trash2, CheckCircle, Clock, AlertCircle, MessageSquare, Image, Download, Edit, Filter, Bell, Heart } from 'lucide-react';
+import { ArrowLeft, Plus, FolderPlus, Trash2, CheckCircle, Clock, AlertCircle, MessageSquare, Image, Download, Edit, Filter, Bell, Heart, RotateCcw } from 'lucide-react';
 
 const formatFileName = (path) => {
   if (!path) return '';
@@ -26,7 +26,6 @@ const isImageFile = (filePath) => {
   return /\.(jpg|jpeg|png|gif|webp)$/i.test(filePath);
 };
 
-// Hàm định dạng ngày giờ chuẩn
 const formatDateTime = (dateString) => {
   if (!dateString) return '';
   const d = new Date(dateString);
@@ -37,6 +36,22 @@ const formatDateTime = (dateString) => {
 export default function AdminWorkspace({ project, tasks, employees, fetchData, onBack }) {
   const rooms = project?.rooms || [];
   const projectTasks = tasks?.filter(t => t.projectId === project?.id) || [];
+
+  const sortedRooms = [...rooms].sort((a, b) => {
+    if (a.createdAt && b.createdAt) return new Date(b.createdAt) - new Date(a.createdAt);
+    return b.id - a.id;
+  });
+
+  const isRoomFullyCompleted = (roomId) => {
+    const rTasks = projectTasks.filter(t => t.roomId === roomId);
+    return rTasks.length > 0 && rTasks.every(t => t.status === 'DONE');
+  };
+
+  // --- TRẠNG THÁI MỚI: LƯU PHÒNG ĐƯỢC HOÀN TÁC ---
+  const [reactivatedRoomId, setReactivatedRoomId] = useState(null);
+
+  const activeRoomsForDropdown = sortedRooms.filter(r => !isRoomFullyCompleted(r.id) || r.id === reactivatedRoomId);
+  const activeRoomsIds = activeRoomsForDropdown.map(r => r.id).join(',');
 
   const [roomId, setRoomId] = useState('');
   const [material, setMaterial] = useState('');
@@ -50,10 +65,15 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
   const [taskFilter, setTaskFilter] = useState('CHUA_XONG');
 
   useEffect(() => {
-    if (rooms.length > 0 && !roomId) {
-      setRoomId(rooms[0].id);
+    if (activeRoomsForDropdown.length > 0) {
+      const isCurrentSelectedStillActive = activeRoomsForDropdown.some(r => r.id.toString() === roomId.toString());
+      if (!roomId || !isCurrentSelectedStillActive) {
+        setRoomId(activeRoomsForDropdown[0].id);
+      }
+    } else {
+      setRoomId('');
     }
-  }, [rooms]);
+  }, [activeRoomsIds, roomId]);
 
   useEffect(() => {
     const handleGlobalPaste = (e) => {
@@ -106,6 +126,7 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
       if (response.ok) {
         alert("🎉 Đã thêm việc lên hệ thống thành công!");
         setMaterial(''); setTitle(''); setNote(''); setSelectedFile(null);
+        setReactivatedRoomId(null); // Xoá trạng thái mồi sau khi thêm xong
         const fileInput = document.getElementById('file-upload');
         if (fileInput) fileInput.value = '';
         fetchData();
@@ -127,7 +148,7 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
       }
 
       const selectedRoom = rooms.find(r => r.id === editingTask.roomId);
-      formData.append('projectName', project.name);
+      formData.append('projectName', project?.name || 'Unknown');
       formData.append('roomName', selectedRoom ? selectedRoom.name : 'Unknown');
 
       if (editFile) formData.append('file', editFile);
@@ -163,6 +184,15 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
       const res = await fetch(`/api/projects/${project.id}/rooms/${rId}`, { method: 'DELETE' });
       if (res.ok) fetchData();
     } catch (error) { alert("Lỗi khi xóa phòng!"); }
+  };
+
+  // --- LOGIC MỚI: HOÀN TÁC PHÒNG (CHỈ GỌI HỒN PHÒNG LÊN Ô CHỌN, KHÔNG SỬA TASK) ---
+  const handleUndoRoom = (roomIdToUndo) => {
+    if (!window.confirm("Mở lại phòng này để thêm việc mới?")) return;
+    setReactivatedRoomId(roomIdToUndo);
+    setTaskFilter('CHUA_XONG');
+    setRoomId(roomIdToUndo); // Tự động chọn luôn phòng đó trong Dropdown
+    window.scrollTo({ top: 0, behavior: 'smooth' }); // Tự động cuộn lên form thêm việc
   };
 
   const handlePasteNoteImage = async (e, taskId) => {
@@ -229,10 +259,10 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
     <div className="bg-[#f8fafc] min-h-screen -m-6 p-6">
       <div className="flex justify-end items-center mb-6">
         <div className="flex items-center gap-3">
-          <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${project.status === 'Đã hoàn thành' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
-            {project.status || 'Đang làm'}
+          <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${project?.status === 'Đã hoàn thành' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
+            {project?.status || 'Đang làm'}
           </span>
-          <span className="text-slate-400 text-sm font-medium">Dự án: <span className="text-slate-900">{project.name}</span></span>
+          <span className="text-slate-400 text-sm font-medium">Dự án: <span className="text-slate-900">{project?.name || 'Đang tải...'}</span></span>
         </div>
       </div>
 
@@ -240,9 +270,9 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
 
         <div className="bg-slate-900 px-6 py-3 flex justify-between items-center text-white sticky top-0 z-50 shadow-md rounded-t-2xl">
           <div className="flex items-center gap-4">
-            <h2 className="text-lg font-bold">{project.name}</h2>
+            <h2 className="text-lg font-bold">{project?.name || 'Đang tải...'}</h2>
             <p className="text-slate-400 text-xs flex items-center gap-1 border-l border-slate-700 pl-4">
-              <Clock size={12} /> Khởi tạo: {new Date(project.createdAt).toLocaleDateString('vi-VN')}
+              <Clock size={12} /> Khởi tạo: {project?.createdAt ? new Date(project.createdAt).toLocaleDateString('vi-VN') : ''}
             </p>
           </div>
           <button onClick={handleAddRoom} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 text-sm rounded-xl font-bold flex items-center gap-2 transition shadow-lg shadow-blue-900/20">
@@ -257,10 +287,14 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
             <div className="space-y-1 lg:col-span-1">
               <label className="text-[11px] font-bold text-slate-500 uppercase ml-1">Vị trí phòng <span className="text-red-500">*</span></label>
-              <select value={roomId} onChange={(e) => setRoomId(e.target.value)} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                <option value="">-- Chọn --</option>
-                {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+
+              <select value={roomId} onChange={(e) => setRoomId(e.target.value)} className="w-full border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium">
+                {activeRoomsForDropdown.length === 0 && <option value="">-- Chưa có phòng --</option>}
+                {activeRoomsForDropdown.map(r => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
               </select>
+
             </div>
             <div className="space-y-1 lg:col-span-1">
               <label className="text-[11px] font-bold text-slate-500 uppercase ml-1">Vật liệu (Tùy chọn)</label>
@@ -307,7 +341,7 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6">
-              {rooms.map(room => {
+              {sortedRooms.map(room => {
                 const roomTasks = projectTasks.filter(t => t.roomId === room.id);
 
                 const hasUnreadInRoom = roomTasks.some(task => {
@@ -340,37 +374,42 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
 
                   if (a.status === 'DONE' && b.status !== 'DONE') return 1;
                   if (a.status !== 'DONE' && b.status === 'DONE') return -1;
-                  return 0;
+
+                  // --- ĐÃ SỬA: VIỆC MỚI THÊM VÀO LUÔN NẰM TRÊN CÙNG ---
+                  return b.id - a.id;
                 });
 
-                // TÍNH TOÁN MATERIAL SUMMARY MỚI Ở ĐÂY
                 const materialSummary = {};
                 roomTasks.forEach(task => {
                   const mat = task.material || 'Khác';
-                  if (!materialSummary[mat]) materialSummary[mat] = { chuaNhan: 0, dangLam: 0, daCat: 0, lastCompletedAt: null };
-                  
-                  if (task.status === 'DONE') {
-                    materialSummary[mat].daCat++;
-                    if (task.completedAt) {
-                      if (!materialSummary[mat].lastCompletedAt || new Date(task.completedAt) > new Date(materialSummary[mat].lastCompletedAt)) {
-                        materialSummary[mat].lastCompletedAt = task.completedAt;
-                      }
-                    }
-                  }
+                  if (!materialSummary[mat]) materialSummary[mat] = { chuaNhan: 0, dangLam: 0, daCat: 0 };
+                  if (task.status === 'DONE') materialSummary[mat].daCat++;
                   else if (task.userId) materialSummary[mat].dangLam++;
                   else materialSummary[mat].chuaNhan++;
                 });
 
-                if (taskFilter === 'TIN_NHAN' && filteredTasks.length === 0) return null;
+                // Nếu Sếp vừa bấm Hoàn tác phòng này, thì hiển thị nó ra màn hình hiện tại kể cả khi trống rỗng để Sếp thấy
+                if (filteredTasks.length === 0 && roomTasks.length > 0 && room.id !== reactivatedRoomId) return null;
+                if (roomTasks.length === 0 && taskFilter !== 'ALL' && taskFilter !== 'CHUA_XONG') return null;
 
                 return (
                   <div key={room.id} className={`group border rounded-2xl bg-white shadow-sm overflow-hidden flex flex-col h-full transition-all ${hasUnreadInRoom ? 'border-red-300 ring-2 ring-red-100' : 'border-slate-200'}`}>
                     <div className={`p-4 flex justify-between items-center border-b ${hasUnreadInRoom ? 'bg-red-50 border-red-100' : 'bg-slate-100 border-slate-200'}`}>
                       <h3 className="font-bold text-slate-800 text-base truncate pr-2 flex items-center gap-2">
                         {room.name}
+                        {room.createdAt && <span className="text-[10px] text-slate-400 font-normal bg-slate-200/50 px-1.5 py-0.5 rounded flex items-center gap-1"><Clock size={10} /> {formatDateTime(room.createdAt)}</span>}
                         {hasUnreadInRoom && <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse shadow-sm flex items-center gap-1"><Bell size={10} /> Có tin nhắn</span>}
                       </h3>
-                      <button onClick={() => handleDeleteRoom(room.id, room.name)} className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-600 transition"><Trash2 size={16} /></button>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {isRoomFullyCompleted(room.id) && (
+                          <button onClick={() => handleUndoRoom(room.id)} title="Mở lại phòng để thêm việc mới" className="p-1.5 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded transition">
+                            <RotateCcw size={16} />
+                          </button>
+                        )}
+                        <button onClick={() => handleDeleteRoom(room.id, room.name)} title="Xóa phòng" className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </div>
 
                     {Object.keys(materialSummary).length > 0 && (
@@ -383,13 +422,6 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
                                 <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isAllDone ? 'bg-green-400' : 'bg-slate-400'}`}></span>
                                 <div className="flex-1">
                                   <span className="font-bold">{mat}:</span> {materialSummary[mat].chuaNhan} chưa nhận, {materialSummary[mat].dangLam} đang làm, {materialSummary[mat].daCat} đã xong
-                                  
-                                  {/* RENDER THỜI GIAN HOÀN THÀNH TẠI ĐÂY */}
-                                  {materialSummary[mat].daCat > 0 && materialSummary[mat].lastCompletedAt && (
-                                    <span className={`ml-1 font-medium ${isAllDone ? 'text-slate-400' : 'text-green-600'}`}>
-                                      (lúc {formatDateTime(materialSummary[mat].lastCompletedAt)})
-                                    </span>
-                                  )}
                                 </div>
                               </li>
                             )
@@ -476,7 +508,7 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
 
                                 <div className="text-[11px] text-slate-500 space-y-1.5 mt-2">
                                   <p className="truncate">File: {task.filePath ? <span className="text-blue-500 font-bold">{formatFileName(task.filePath)}</span> : '---'}</p>
-                                  {task.userId && <p className="font-bold text-slate-700">Nhân viên: {task.user?.fullName}</p>}
+                                  {task.userId && <p className="font-bold text-slate-700">Nhân viên: {task.user?.fullName || 'Không rõ'}</p>}
 
                                   <div className="pt-1">
                                     {task.status === 'DONE' ? (
@@ -505,15 +537,15 @@ export default function AdminWorkspace({ project, tasks, employees, fetchData, o
                                 <div className="border-t border-slate-100 pt-3 mt-3">
                                   <div className="space-y-2 mb-3 max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 pr-1 flex flex-col">
                                     {task.notes && task.notes.map(n => {
+                                      const isAdmin = !n.userId;
+                                      const senderName = isAdmin ? "Sếp" : (n.user?.fullName ? n.user.fullName.split(' ').pop() : 'Thợ');
                                       const isImageNote = n.content.startsWith('[IMAGE]');
                                       const noteContent = isImageNote ? n.content.replace('[IMAGE]', '') : n.content;
 
                                       return (
                                         <div key={n.id} className="text-[13px] leading-relaxed flex gap-2 items-start group/note hover:bg-slate-50 p-1 rounded-lg transition-colors -ml-1">
                                           <div className="flex-1">
-                                            <span className={`font-bold ${!n.userId ? 'text-red-600' : 'text-blue-600'}`}>
-                                              {!n.userId ? 'Sếp' : n.user?.fullName.split(' ').pop()}:
-                                            </span>
+                                            <span className={`font-bold ${isAdmin ? 'text-red-600' : 'text-blue-600'}`}>{senderName}: </span>
 
                                             <span className="text-[10px] text-slate-400 font-normal ml-1.5">({formatDateTime(n.createdAt)})</span>
 

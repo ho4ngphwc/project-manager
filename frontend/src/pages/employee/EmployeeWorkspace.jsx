@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, CheckCircle, Clock, MessageSquare, Image as ImageIcon, Download, HandMetal, CheckSquare, XCircle, RotateCcw, Filter, Bell, Heart } from 'lucide-react';
 
 const formatFileName = (path) => {
@@ -23,7 +23,6 @@ const isImageFile = (filePath) => {
     return /\.(jpg|jpeg|png|gif|webp)$/i.test(filePath);
 };
 
-// Hàm định dạng ngày giờ chuẩn
 const formatDateTime = (dateString) => {
     if (!dateString) return '';
     const d = new Date(dateString);
@@ -35,7 +34,54 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
     const rooms = project?.rooms || [];
     const projectTasks = tasks?.filter(t => t.projectId === project?.id) || [];
 
+    const sortedRooms = [...rooms].sort((a, b) => {
+        if (a.createdAt && b.createdAt) return new Date(b.createdAt) - new Date(a.createdAt);
+        return b.id - a.id;
+    });
+
     const [taskFilter, setTaskFilter] = useState('ALL');
+
+    // --- LOGIC MỚI: THEO DÕI VÀ PHÁT ÂM THANH THÔNG BÁO ---
+    const prevTasksRef = useRef();
+
+    useEffect(() => {
+        if (!tasks || !project) return;
+
+        // Nếu là lần đầu load trang, chỉ lưu lại dữ liệu chứ không kêu
+        if (!prevTasksRef.current) {
+            prevTasksRef.current = tasks;
+            return;
+        }
+
+        const oldTasks = prevTasksRef.current.filter(t => t.projectId === project.id);
+        const newTasks = tasks.filter(t => t.projectId === project.id);
+
+        let hasNewAdminAction = false;
+
+        // 1. Kiểm tra xem Sếp có thêm việc mới không
+        if (newTasks.length > oldTasks.length) {
+            hasNewAdminAction = true;
+        } else {
+            // 2. Kiểm tra xem Sếp có nhắn tin mới không (tin nhắn có userId = null)
+            const countAdminNotes = (taskList) => taskList.reduce((sum, t) => sum + (t.notes?.filter(n => !n.userId).length || 0), 0);
+
+            if (countAdminNotes(newTasks) > countAdminNotes(oldTasks)) {
+                hasNewAdminAction = true;
+            }
+        }
+
+        // Kích hoạt âm thanh
+        if (hasNewAdminAction) {
+            // Tiếng "Ting" thông báo có sẵn trên mạng
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+            audio.play().catch(err => {
+                console.log("Trình duyệt chặn tự động phát nhạc (Thợ cần click chuột vào màn hình 1 lần trước khi chuông có thể kêu):", err);
+            });
+        }
+
+        // Cập nhật lại bộ nhớ
+        prevTasksRef.current = tasks;
+    }, [tasks, project]);
 
     useEffect(() => {
         const intervalId = setInterval(() => { if (fetchData) fetchData(); }, 5000);
@@ -149,10 +195,10 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
         <div className="bg-[#f8fafc] min-h-screen -m-6 p-6">
             <div className="flex justify-end items-center mb-6">
                 <div className="flex items-center gap-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${project.status === 'Đã hoàn thành' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
-                        {project.status || 'Đang làm'}
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${project?.status === 'Đã hoàn thành' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
+                        {project?.status || 'Đang làm'}
                     </span>
-                    <span className="text-slate-400 text-sm font-medium">Dự án: <span className="text-slate-900">{project.name}</span></span>
+                    <span className="text-slate-400 text-sm font-medium">Dự án: <span className="text-slate-900">{project?.name || 'Đang tải...'}</span></span>
                 </div>
             </div>
 
@@ -172,10 +218,11 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
                     <button onClick={() => setTaskFilter('ALL')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'ALL' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Tất cả</button>
                     <button onClick={() => setTaskFilter('CHUA_NHAN')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'CHUA_NHAN' ? 'bg-orange-500 text-white' : 'bg-orange-50 text-orange-600 hover:bg-orange-100'}`}>Chưa ai nhận</button>
                     <button onClick={() => setTaskFilter('MY_TASKS')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'MY_TASKS' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}>Việc của tôi</button>
+                    <button onClick={() => setTaskFilter('DA_XONG')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${taskFilter === 'DA_XONG' ? 'bg-green-600 text-white' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>Đã xong</button>
 
                     <button
                         onClick={() => setTaskFilter('CO_NOTE')}
-                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${taskFilter === 'CO_NOTE' ? 'bg-red-500 text-white shadow-md ring-2 ring-red-300' : 'bg-red-50 text-red-600 border border-red-100 hover:bg-red-100'}`}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ml-auto ${taskFilter === 'CO_NOTE' ? 'bg-red-500 text-white shadow-md ring-2 ring-red-300' : 'bg-red-50 text-red-600 border border-red-100 hover:bg-red-100'}`}
                     >
                         Tin nhắn sếp <Bell size={12} className={taskFilter === 'CO_NOTE' ? '' : 'animate-bounce'} />
                     </button>
@@ -186,13 +233,14 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
                         <div className="text-center py-20"><p className="text-slate-500 font-medium">Sếp chưa tạo phòng nào.</p></div>
                     ) : (
                         <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6">
-                            {rooms.map(room => {
+                            {sortedRooms.map(room => {
                                 const roomTasks = projectTasks.filter(t => t.roomId === room.id);
 
                                 const displayTasks = roomTasks.filter(t => {
                                     if (taskFilter === 'ALL') return true;
                                     if (taskFilter === 'CHUA_NHAN') return !t.userId;
-                                    if (taskFilter === 'MY_TASKS') return t.userId === parseInt(currentUser?.id);
+                                    if (taskFilter === 'MY_TASKS') return t.userId === parseInt(currentUser?.id) && t.status !== 'DONE';
+                                    if (taskFilter === 'DA_XONG') return t.status === 'DONE';
                                     if (taskFilter === 'CO_NOTE') return checkUnreadAdminNote(t, currentUser?.id);
                                     return true;
                                 }).sort((a, b) => {
@@ -204,15 +252,20 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
 
                                     if (a.status === 'DONE' && b.status !== 'DONE') return 1;
                                     if (a.status !== 'DONE' && b.status === 'DONE') return -1;
-                                    return 0;
+
+                                    return b.id - a.id;
                                 });
 
-                                if (taskFilter === 'CO_NOTE' && displayTasks.length === 0) return null;
+                                if (displayTasks.length === 0 && roomTasks.length > 0) return null;
+                                if (roomTasks.length === 0 && taskFilter !== 'ALL') return null;
 
                                 return (
                                     <div key={room.id} className="border border-slate-200 rounded-2xl bg-white shadow-sm overflow-hidden flex flex-col h-full">
                                         <div className="p-4 bg-slate-100 flex justify-between items-center border-b border-slate-200">
-                                            <h3 className="font-bold text-slate-800 text-base truncate pr-2">{room.name}</h3>
+                                            <h3 className="font-bold text-slate-800 text-base truncate pr-2 flex items-center gap-2">
+                                                {room.name}
+                                                {room.createdAt && <span className="text-[10px] text-slate-400 font-normal bg-slate-200/50 px-1.5 py-0.5 rounded flex items-center gap-1"><Clock size={10} /> {formatDateTime(room.createdAt)}</span>}
+                                            </h3>
                                             <span className="text-xs font-bold bg-white text-slate-500 px-2 py-1 rounded-md border">{roomTasks.length} mục</span>
                                         </div>
 
@@ -228,9 +281,9 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
 
                                                     return (
                                                         <div key={task.id} className={`flex flex-col gap-3 p-3 rounded-xl border transition-all shadow-sm relative ${hasUnreadNote ? 'border-2 border-red-400 bg-red-50/20 shadow-[0_0_12px_rgba(239,68,68,0.15)]' :
-                                                                task.status === 'DONE' ? 'border-green-200 bg-green-50/30 opacity-70' :
-                                                                    isMyTask ? 'border-blue-300 bg-blue-50' :
-                                                                        task.userId ? 'border-slate-200 bg-slate-100 opacity-60' : 'border-orange-200 bg-white hover:border-orange-400'
+                                                            task.status === 'DONE' ? 'border-green-200 bg-green-50/30 opacity-70' :
+                                                                isMyTask ? 'border-blue-300 bg-blue-50' :
+                                                                    task.userId ? 'border-slate-200 bg-slate-100 opacity-60' : 'border-orange-200 bg-white hover:border-orange-400'
                                                             }`}>
 
                                                             {hasUnreadNote && (
@@ -278,7 +331,7 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
                                                                             <button onClick={() => handleCompleteTask(task.id)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition shadow-md active:scale-95"><CheckSquare size={18} /> Đã hoàn thành</button>
                                                                         </div>
                                                                     ) : (
-                                                                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 text-slate-500 rounded-lg text-xs font-bold">🔒 {task.user?.fullName} đang làm</div>
+                                                                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 text-slate-500 rounded-lg text-xs font-bold">🔒 {task.user?.fullName || 'Nhân viên'} đang làm</div>
                                                                     )}
                                                                 </div>
 
@@ -286,7 +339,7 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
                                                                     <div className="space-y-2 mb-3 max-h-48 overflow-y-auto scrollbar-thin pr-1 flex flex-col">
                                                                         {task.notes && task.notes.map(n => {
                                                                             const isAdmin = !n.userId;
-                                                                            const senderName = isAdmin ? "Sếp" : n.user?.fullName.split(' ').pop();
+                                                                            const senderName = isAdmin ? "Sếp" : (n.user?.fullName ? n.user.fullName.split(' ').pop() : 'Thợ');
                                                                             const isImageNote = n.content.startsWith('[IMAGE]');
                                                                             const noteContent = isImageNote ? n.content.replace('[IMAGE]', '') : n.content;
 
@@ -295,7 +348,6 @@ export default function EmployeeWorkspace({ project, tasks, fetchData, onBack, c
                                                                                     <div className="flex-1">
                                                                                         <span className={`font-bold ${isAdmin ? 'text-red-600' : 'text-blue-600'}`}>{senderName}: </span>
 
-                                                                                        {/* --- ĐÃ HIỂN THỊ THỜI GIAN NHẮN Ở ĐÂY CHO NHÂN VIÊN --- */}
                                                                                         <span className="text-[10px] text-slate-400 font-normal ml-1.5">({formatDateTime(n.createdAt)})</span>
 
                                                                                         {isImageNote ? (
