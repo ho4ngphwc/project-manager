@@ -41,6 +41,8 @@ model Room {
   id        Int      @id @default(autoincrement())
   name      String
   
+  createdAt DateTime @default(now())
+
   projectId Int
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   
